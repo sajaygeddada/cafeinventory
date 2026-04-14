@@ -31,8 +31,9 @@
   --surface2: #ede7df;
   --surface3: #e0d8ce;
   --border:   #d0c4b8;
-  --text:     #2a1f14;
-  --muted:    #7a6555;
+  --text:     #1a0f08;
+  --muted:    #4a3828;
+  --accent3:  #7a3d00;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
