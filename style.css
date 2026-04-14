@@ -24,6 +24,17 @@
   --transition: 0.2s ease;
 }
 
+/* LIGHT MODE */
+[data-theme="light"] {
+  --bg:       #f5f0ea;
+  --surface:  #ffffff;
+  --surface2: #ede7df;
+  --surface3: #e0d8ce;
+  --border:   #d0c4b8;
+  --text:     #2a1f14;
+  --muted:    #7a6555;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
