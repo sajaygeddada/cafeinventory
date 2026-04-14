@@ -13,9 +13,9 @@ const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('123456789'); // simple base64 for demo; see note in README
 
 // ─── SUPABASE INIT ────────────────────────────
-let supabase;
+let sb;
 try {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 } catch(e) {
   console.warn('Supabase init failed. Running in offline/local mode.', e);
 }
@@ -93,13 +93,13 @@ document.addEventListener('keydown', (e) => {
 // ─── DB STATUS ────────────────────────────────
 async function updateDBStatus() {
   const el = document.getElementById('db-status');
-  if (!supabase || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+  if (!sb || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
     el.textContent = '● DB not configured';
     el.className = 'db-status error';
     return;
   }
   try {
-    const { error } = await supabase.from('inventory').select('id').limit(1);
+    const { error } = await sb.from('inventory').select('id').limit(1);
     if (error) throw error;
     el.textContent = '● Supabase Connected';
     el.className = 'db-status connected';
@@ -147,8 +147,8 @@ function switchTab(name, btn) {
 
 // ─── INVENTORY ────────────────────────────────
 async function loadInventory() {
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    const { data, error } = await supabase.from('inventory').select('*').order('name');
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { data, error } = await sb.from('inventory').select('*').order('name');
     if (!error) allInventory = data || [];
   } else {
     allInventory = JSON.parse(localStorage.getItem('sc_inventory') || '[]');
@@ -246,11 +246,11 @@ async function saveInventory() {
 
   const record = { name, category, quantity, unit, min_stock, cost_per_unit: cost, supplier, notes };
 
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     if (id) {
-      await supabase.from('inventory').update(record).eq('id', id);
+      await sb.from('inventory').update(record).eq('id', id);
     } else {
-      await supabase.from('inventory').insert([record]);
+      await sb.from('inventory').insert([record]);
     }
   } else {
     if (id) {
@@ -286,8 +286,8 @@ function editInventory(id) {
 
 // ─── EXPENSES ─────────────────────────────────
 async function loadExpenses() {
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    const { data, error } = await supabase.from('expenses').select('*').order('date', { ascending: false });
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { data, error } = await sb.from('expenses').select('*').order('date', { ascending: false });
     if (!error) allExpenses = data || [];
   } else {
     allExpenses = JSON.parse(localStorage.getItem('sc_expenses') || '[]');
@@ -349,11 +349,11 @@ async function saveExpense() {
 
   const record = { date, description: desc, category: cat, amount: amt, paid_by: paid, notes: note };
 
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     if (id) {
-      await supabase.from('expenses').update(record).eq('id', id);
+      await sb.from('expenses').update(record).eq('id', id);
     } else {
-      await supabase.from('expenses').insert([record]);
+      await sb.from('expenses').insert([record]);
     }
   } else {
     if (id) {
@@ -390,8 +390,8 @@ function editExpense(id) {
 
 // ─── BILLS ────────────────────────────────────
 async function loadBills() {
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    const { data, error } = await supabase.from('bills').select('*').order('month_year', { ascending: false });
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { data, error } = await sb.from('bills').select('*').order('month_year', { ascending: false });
     if (!error) allBills = data || [];
   } else {
     allBills = JSON.parse(localStorage.getItem('sc_bills') || '[]');
@@ -463,11 +463,11 @@ async function saveBill() {
 
   const record = { type, month_year: month, amount, due_date: duedate || null, paid, notes };
 
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     if (id) {
-      await supabase.from('bills').update(record).eq('id', id);
+      await sb.from('bills').update(record).eq('id', id);
     } else {
-      await supabase.from('bills').insert([record]);
+      await sb.from('bills').insert([record]);
     }
   } else {
     if (id) {
@@ -501,8 +501,8 @@ function editBill(id) {
 
 // ─── RENT ─────────────────────────────────────
 async function loadRent() {
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-    const { data } = await supabase.from('rent_config').select('*').limit(1);
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { data } = await sb.from('rent_config').select('*').limit(1);
     rentConfig = data && data[0] ? data[0] : null;
   } else {
     rentConfig = JSON.parse(localStorage.getItem('sc_rent') || 'null');
@@ -547,11 +547,11 @@ async function saveRent() {
 
   const record = { amount, landlord, due_day, notes };
 
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     if (rentConfig && rentConfig.id) {
-      await supabase.from('rent_config').update(record).eq('id', rentConfig.id);
+      await sb.from('rent_config').update(record).eq('id', rentConfig.id);
     } else {
-      await supabase.from('rent_config').insert([record]);
+      await sb.from('rent_config').insert([record]);
     }
   } else {
     rentConfig = { ...(rentConfig||{}), ...record, id: rentConfig?.id || uid() };
@@ -574,9 +574,9 @@ function confirmDelete(table, id, label) {
 async function doDelete(table, id) {
   closeModal('confirm-modal');
 
-  if (supabase && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+  if (sb && SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     const tbl = table === 'inventory' ? 'inventory' : table === 'expense' ? 'expenses' : 'bills';
-    await supabase.from(tbl).delete().eq('id', id);
+    await sb.from(tbl).delete().eq('id', id);
   } else {
     if (table === 'inventory') {
       allInventory = allInventory.filter(i => i.id !== id);
