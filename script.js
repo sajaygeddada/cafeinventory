@@ -55,8 +55,12 @@ function handleLogin() {
 
   if (user !== ADMIN_USERNAME) return showLoginError();
 
-  const stored = localStorage.getItem('sc_pw') || DEFAULT_PASSWORD_HASH;
-  if (btoa(pass) !== stored) return showLoginError();
+  try {
+    const stored = localStorage.getItem('sc_pw') || DEFAULT_PASSWORD_HASH;
+    if (btoa(unescape(encodeURIComponent(pass))) !== stored) return showLoginError();
+  } catch(e) {
+    return showLoginError();
+  }
 
   document.getElementById('login-error').classList.add('hidden');
   sessionStorage.setItem('sc_auth', 'ok');
