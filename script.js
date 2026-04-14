@@ -10,7 +10,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const ADMIN_USERNAME = 'sajaygeddada';
 // Password is hashed & stored in localStorage on first run.
 // Default password (change after first login): sajaysCafe@2026
-const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026'); // simple base64 for demo; see note in README
+const DEFAULT_PASSWORD_HASH = btoa('123456789'); // simple base64 for demo; see note in README
 
 // ─── SUPABASE INIT ────────────────────────────
 let supabase;
