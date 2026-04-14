@@ -41,6 +41,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
   checkSession();
   updateDBStatus();
+  // restore saved theme
+const savedTheme = localStorage.getItem('sc_theme');
+if (savedTheme) {
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = savedTheme === 'light' ? '☀️ Light' : '🌙 Dark';
+}
 });
 
 // ─── AUTH ─────────────────────────────────────
@@ -795,4 +802,12 @@ function showToast(msg, type = 'success') {
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+// ─── THEME TOGGLE ─────────────────────────────
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('theme-toggle').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+  localStorage.setItem('sc_theme', isDark ? 'light' : 'dark');
 }
