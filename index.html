@@ -13,7 +13,7 @@
   <!-- LOGIN SCREEN -->
   <div id="login-screen" class="login-wrap">
     <div class="login-card">
-      <div class="login-logo"><img src="Sajay_s_Cafe_High_Res.jpg" style="width:80px;height:80px;object-fit:cover;border-radius:50%;" /></div>
+      <div class="login-logo">☕</div>
       <h1 class="login-title">Sajay's Café</h1>
       <p class="login-sub">Inventory & Operations</p>
       <div class="login-form">
@@ -37,7 +37,7 @@
     <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <img src="Sajay_s_Cafe_High_Res.jpg" style="width:36px;height:36px;object-fit:cover;border-radius:50%;" />
+        <span class="sidebar-logo">☕</span>
         <div>
           <div class="sidebar-title">Sajay's Café</div>
           <div class="sidebar-sub">Operations HQ</div>
@@ -75,10 +75,9 @@
       <div class="topbar">
         <h2 id="page-title" class="page-title">Dashboard</h2>
         <div class="topbar-right">
-  <span class="db-status" id="db-status">● Connecting...</span>
-  <span class="topbar-date" id="topbar-date"></span>
-  <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.85rem;">🌙 Dark</button>
-</div>
+          <span class="db-status" id="db-status">● Connecting...</span>
+          <span class="topbar-date" id="topbar-date"></span>
+        </div>
       </div>
 
       <!-- TOAST -->
@@ -148,19 +147,7 @@
 
         <div class="table-wrap">
           <table class="data-table" id="inv-table">
-            <thead>
-              <tr>
-                <th>Item Name</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Unit</th>
-                <th>Min Stock</th>
-                <th>Cost/Unit (₹)</th>
-                <th>Supplier</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead id="inv-thead"></thead>
             <tbody id="inv-tbody"></tbody>
           </table>
         </div>
@@ -178,17 +165,7 @@
 
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th>Amount (₹)</th>
-                <th>Paid By</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead id="exp-thead"></thead>
             <tbody id="exp-tbody"></tbody>
           </table>
         </div>
@@ -243,17 +220,7 @@
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Month/Year</th>
-                <th>Type</th>
-                <th>Amount (₹)</th>
-                <th>Due Date</th>
-                <th>Paid</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead id="bills-thead"></thead>
             <tbody id="bills-tbody"></tbody>
           </table>
         </div>
