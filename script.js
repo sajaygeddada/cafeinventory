@@ -9,11 +9,8 @@ const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
 let sb;
-try {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-} catch(e) {
-  console.warn('Supabase init failed. Running in offline/local mode.', e);
-}
+try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+catch(e) { console.warn('Supabase offline mode', e); }
 
 // ─── DATA STATE ───────────────────────────────
 let allInventory = [], allExpenses = [], allBills = [], rentConfig = null, billModalPreset = {};
@@ -97,6 +94,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
   checkSession();
   updateDBStatus();
+
+  // restore saved theme
+  const savedTheme = localStorage.getItem('sc_theme');
+  if (savedTheme) {
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = savedTheme === 'light' ? '☀️ Light' : '🌙 Dark';
+  }
 });
 
 // ─── AUTH ─────────────────────────────────────
@@ -330,7 +335,7 @@ function onColDragEnd() {
 //  INVENTORY
 // =============================================
 async function loadInventory() {
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     const {data,error}=await sb.from('inventory').select('*').order('name');
     if (!error) allInventory=data||[];
   } else { allInventory=JSON.parse(localStorage.getItem('sc_inventory')||'[]'); }
@@ -350,7 +355,7 @@ function filterInventory() { renderInventoryTable(getCurrentInventory()); }
 //  EXPENSES
 // =============================================
 async function loadExpenses() {
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     const {data,error}=await sb.from('expenses').select('*').order('date',{ascending:false});
     if (!error) allExpenses=data||[];
   } else { allExpenses=JSON.parse(localStorage.getItem('sc_expenses')||'[]'); }
@@ -370,7 +375,7 @@ function filterExpenses() { renderExpensesTable(getCurrentExpenses()); }
 //  BILLS
 // =============================================
 async function loadBills() {
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     const {data,error}=await sb.from('bills').select('*').order('month_year',{ascending:false});
     if (!error) allBills=data||[];
   } else { allBills=JSON.parse(localStorage.getItem('sc_bills')||'[]'); }
@@ -395,7 +400,7 @@ function renderBillsTab() {
 //  RENT
 // =============================================
 async function loadRent() {
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     const {data}=await sb.from('rent_config').select('*').limit(1);
     rentConfig=data&&data[0]?data[0]:null;
   } else { rentConfig=JSON.parse(localStorage.getItem('sc_rent')||'null'); }
@@ -421,7 +426,7 @@ async function saveRent() {
   const notes=document.getElementById('rent-notes').value.trim();
   if (amount<=0) return showToast('Enter a valid rent amount','error');
   const record={amount,landlord,due_day,notes};
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     if (rentConfig?.id){await sb.from('rent_config').update(record).eq('id',rentConfig.id);}
     else {await sb.from('rent_config').insert([record]);}
   } else { rentConfig={...(rentConfig||{}), ...record, id:rentConfig?.id||uid()}; localStorage.setItem('sc_rent',JSON.stringify(rentConfig)); }
@@ -479,7 +484,7 @@ async function saveInventory() {
     supplier:document.getElementById('inv-supplier').value.trim(),
     notes:document.getElementById('inv-notes').value.trim(),
   };
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     if (id){await sb.from('inventory').update(record).eq('id',id);}
     else   {await sb.from('inventory').insert([record]);}
   } else {
@@ -514,7 +519,7 @@ async function saveExpense() {
     category:document.getElementById('exp-cat').value, amount:amt,
     paid_by:document.getElementById('exp-paidby').value, notes:document.getElementById('exp-notes').value.trim(),
   };
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     if (id){await sb.from('expenses').update(record).eq('id',id);}
     else   {await sb.from('expenses').insert([record]);}
   } else {
@@ -546,7 +551,7 @@ async function saveBill() {
     amount, due_date:document.getElementById('bill-duedate').value||null,
     paid:document.getElementById('bill-paid').value, notes:document.getElementById('bill-notes').value.trim(),
   };
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     if (id){await sb.from('bills').update(record).eq('id',id);}
     else   {await sb.from('bills').insert([record]);}
   } else {
@@ -577,7 +582,7 @@ function confirmDelete(table,id,label) {
 
 async function doDelete(table,id) {
   closeModal('confirm-modal');
-  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
     await sb.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
   } else {
     if (table==='inventory'){allInventory=allInventory.filter(i=>i.id!==id);localStorage.setItem('sc_inventory',JSON.stringify(allInventory));}
@@ -674,4 +679,12 @@ function showToast(msg,type='success') {
   el.textContent=(type==='success'?'✅ ':type==='error'?'❌ ':'ℹ️ ')+msg;
   el.className=`toast ${type}`; el.classList.remove('hidden');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.add('hidden'),3000);
+}
+
+// ─── THEME TOGGLE ─────────────────────────────
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('theme-toggle').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+  localStorage.setItem('sc_theme', isDark ? 'light' : 'dark');
 }
