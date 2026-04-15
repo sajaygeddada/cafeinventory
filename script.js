@@ -8,9 +8,12 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
-let supabase;
-try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
-catch(e) { console.warn('Supabase offline mode', e); }
+let sb;
+try {
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+} catch(e) {
+  console.warn('Supabase init failed. Running in offline/local mode.', e);
+}
 
 // ─── DATA STATE ───────────────────────────────
 let allInventory = [], allExpenses = [], allBills = [], rentConfig = null, billModalPreset = {};
@@ -115,8 +118,8 @@ document.addEventListener('keydown', e => { if (e.key==='Enter' && !document.get
 
 async function updateDBStatus() {
   const el = document.getElementById('db-status');
-  if (!supabase || SUPABASE_URL==='YOUR_SUPABASE_URL') { el.textContent='● DB not configured'; el.className='db-status error'; return; }
-  try { const {error}=await supabase.from('inventory').select('id').limit(1); if(error)throw error; el.textContent='● Supabase Connected'; el.className='db-status connected'; }
+  if (!sb || SUPABASE_URL==='YOUR_SUPABASE_URL') { el.textContent='● DB not configured'; el.className='db-status error'; return; }
+  try { const {error}=await sb.from('inventory').select('id').limit(1); if(error)throw error; el.textContent='● Supabase Connected'; el.className='db-status connected'; }
   catch { el.textContent='● DB error'; el.className='db-status error'; }
 }
 
@@ -328,7 +331,7 @@ function onColDragEnd() {
 // =============================================
 async function loadInventory() {
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await supabase.from('inventory').select('*').order('name');
+    const {data,error}=await sb.from('inventory').select('*').order('name');
     if (!error) allInventory=data||[];
   } else { allInventory=JSON.parse(localStorage.getItem('sc_inventory')||'[]'); }
   renderInventoryTable(allInventory);
@@ -348,7 +351,7 @@ function filterInventory() { renderInventoryTable(getCurrentInventory()); }
 // =============================================
 async function loadExpenses() {
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await supabase.from('expenses').select('*').order('date',{ascending:false});
+    const {data,error}=await sb.from('expenses').select('*').order('date',{ascending:false});
     if (!error) allExpenses=data||[];
   } else { allExpenses=JSON.parse(localStorage.getItem('sc_expenses')||'[]'); }
   renderExpensesTable(allExpenses);
@@ -368,7 +371,7 @@ function filterExpenses() { renderExpensesTable(getCurrentExpenses()); }
 // =============================================
 async function loadBills() {
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await supabase.from('bills').select('*').order('month_year',{ascending:false});
+    const {data,error}=await sb.from('bills').select('*').order('month_year',{ascending:false});
     if (!error) allBills=data||[];
   } else { allBills=JSON.parse(localStorage.getItem('sc_bills')||'[]'); }
   renderBillsTab();
@@ -393,7 +396,7 @@ function renderBillsTab() {
 // =============================================
 async function loadRent() {
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data}=await supabase.from('rent_config').select('*').limit(1);
+    const {data}=await sb.from('rent_config').select('*').limit(1);
     rentConfig=data&&data[0]?data[0]:null;
   } else { rentConfig=JSON.parse(localStorage.getItem('sc_rent')||'null'); }
   renderRentCard();
@@ -419,8 +422,8 @@ async function saveRent() {
   if (amount<=0) return showToast('Enter a valid rent amount','error');
   const record={amount,landlord,due_day,notes};
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (rentConfig?.id){await supabase.from('rent_config').update(record).eq('id',rentConfig.id);}
-    else {await supabase.from('rent_config').insert([record]);}
+    if (rentConfig?.id){await sb.from('rent_config').update(record).eq('id',rentConfig.id);}
+    else {await sb.from('rent_config').insert([record]);}
   } else { rentConfig={...(rentConfig||{}), ...record, id:rentConfig?.id||uid()}; localStorage.setItem('sc_rent',JSON.stringify(rentConfig)); }
   closeModal('rent-modal'); renderRentCard(); renderDashboard(); showToast('Rent saved!','success');
 }
@@ -477,8 +480,8 @@ async function saveInventory() {
     notes:document.getElementById('inv-notes').value.trim(),
   };
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await supabase.from('inventory').update(record).eq('id',id);}
-    else   {await supabase.from('inventory').insert([record]);}
+    if (id){await sb.from('inventory').update(record).eq('id',id);}
+    else   {await sb.from('inventory').insert([record]);}
   } else {
     if (id){const idx=allInventory.findIndex(i=>i.id===id);if(idx>=0)allInventory[idx]={...allInventory[idx],...record};}
     else   {allInventory.push({...record,id:uid()});}
@@ -512,8 +515,8 @@ async function saveExpense() {
     paid_by:document.getElementById('exp-paidby').value, notes:document.getElementById('exp-notes').value.trim(),
   };
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await supabase.from('expenses').update(record).eq('id',id);}
-    else   {await supabase.from('expenses').insert([record]);}
+    if (id){await sb.from('expenses').update(record).eq('id',id);}
+    else   {await sb.from('expenses').insert([record]);}
   } else {
     if (id){const idx=allExpenses.findIndex(e=>e.id===id);if(idx>=0)allExpenses[idx]={...allExpenses[idx],...record};}
     else   {allExpenses.push({...record,id:uid()});}
@@ -544,8 +547,8 @@ async function saveBill() {
     paid:document.getElementById('bill-paid').value, notes:document.getElementById('bill-notes').value.trim(),
   };
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await supabase.from('bills').update(record).eq('id',id);}
-    else   {await supabase.from('bills').insert([record]);}
+    if (id){await sb.from('bills').update(record).eq('id',id);}
+    else   {await sb.from('bills').insert([record]);}
   } else {
     if (id){const idx=allBills.findIndex(b=>b.id===id);if(idx>=0)allBills[idx]={...allBills[idx],...record};}
     else   {allBills.push({...record,id:uid()});}
@@ -575,7 +578,7 @@ function confirmDelete(table,id,label) {
 async function doDelete(table,id) {
   closeModal('confirm-modal');
   if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    await supabase.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
+    await sb.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
   } else {
     if (table==='inventory'){allInventory=allInventory.filter(i=>i.id!==id);localStorage.setItem('sc_inventory',JSON.stringify(allInventory));}
     if (table==='expense')  {allExpenses=allExpenses.filter(e=>e.id!==id);localStorage.setItem('sc_expenses',JSON.stringify(allExpenses));}
