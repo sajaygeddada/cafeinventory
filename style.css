@@ -24,18 +24,6 @@
   --transition: 0.2s ease;
 }
 
-/* LIGHT MODE */
-[data-theme="light"] {
-  --bg:       #f5f0ea;
-  --surface:  #ffffff;
-  --surface2: #ede7df;
-  --surface3: #e0d8ce;
-  --border:   #d0c4b8;
-  --text:     #1a0f08;
-  --muted:    #4a3828;
-  --accent3:  #7a3d00;
-}
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
@@ -818,6 +806,84 @@ html, body {
   font-size: 2.5rem;
   margin-bottom: 0.75rem;
   opacity: 0.5;
+}
+
+/* ===================== TOTALS FOOTER ROW ===================== */
+.totals-row {
+  background: linear-gradient(90deg, rgba(201,125,46,0.12) 0%, rgba(201,125,46,0.05) 60%, transparent 100%);
+  border-top: 2px solid var(--accent);
+  position: sticky;
+  bottom: 0;
+}
+
+.totals-cell {
+  padding: 0.7rem 0.85rem;
+  font-size: 0.82rem;
+  vertical-align: middle;
+  border-bottom: none !important;
+}
+
+.totals-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.totals-tag {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.totals-count {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.totals-num {
+  font-weight: 600;
+  color: var(--accent3);
+  font-variant-numeric: tabular-nums;
+}
+
+.totals-money {
+  font-family: 'Playfair Display', serif;
+  font-size: 0.95rem;
+  color: var(--accent2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.totals-sublabel {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.totals-muted {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.totals-warn {
+  color: var(--warning);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.totals-ok {
+  color: var(--success);
+  font-size: 0.78rem;
+  font-weight: 500;
 }
 
 /* ===================== DRAG & DROP — ROWS ===================== */

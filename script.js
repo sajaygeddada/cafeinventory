@@ -3,13 +3,13 @@
 //  script.js — Row D&D + Column D&D + Sorting
 // =============================================
 
-const SUPABASE_URL  = 'https://cebhmyeelkndpyoysswg.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlYmhteWVlbGtuZHB5b3lzc3dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzYyOTYsImV4cCI6MjA5MTc1MjI5Nn0._46DfnsLqxgngXhV6xjevYkBZtBjlQCKSNIPtck9Vac';
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
 const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
-let sb;
-try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
+let supabase;
+try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
 catch(e) { console.warn('Supabase offline mode', e); }
 
 // ─── DATA STATE ───────────────────────────────
@@ -94,14 +94,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   checkSession();
   updateDBStatus();
-
-  // restore saved theme
-  const savedTheme = localStorage.getItem('sc_theme');
-  if (savedTheme) {
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = savedTheme === 'light' ? '☀️ Light' : '🌙 Dark';
-  }
 });
 
 // ─── AUTH ─────────────────────────────────────
@@ -123,8 +115,8 @@ document.addEventListener('keydown', e => { if (e.key==='Enter' && !document.get
 
 async function updateDBStatus() {
   const el = document.getElementById('db-status');
-  if (!sb || SUPABASE_URL==='YOUR_SUPABASE_URL') { el.textContent='● DB not configured'; el.className='db-status error'; return; }
-  try { const {error}=await sb.from('inventory').select('id').limit(1); if(error)throw error; el.textContent='● Supabase Connected'; el.className='db-status connected'; }
+  if (!supabase || SUPABASE_URL==='YOUR_SUPABASE_URL') { el.textContent='● DB not configured'; el.className='db-status error'; return; }
+  try { const {error}=await supabase.from('inventory').select('id').limit(1); if(error)throw error; el.textContent='● Supabase Connected'; el.className='db-status connected'; }
   catch { el.textContent='● DB error'; el.className='db-status error'; }
 }
 
@@ -200,6 +192,79 @@ function renderTable(tableKey, items, tbodyId, theadId) {
     tr.addEventListener('dragend',   onRowDragEnd);
     tr.addEventListener('dragleave', onRowDragLeave);
   });
+
+  // ── TOTALS FOOTER ──
+  const table = tbody.closest('table');
+  let tfoot = table.querySelector('tfoot');
+  if (!tfoot) { tfoot = document.createElement('tfoot'); table.appendChild(tfoot); }
+
+  // Per-table totals logic
+  const totals = buildTotals(tableKey, items, colOrder);
+  tfoot.innerHTML = `<tr class="totals-row">${colOrder.map((col, ci) => {
+    const val = totals[col];
+    const isFirst = ci === 0;
+    return `<td class="totals-cell${isFirst?' totals-label':''}">${val}</td>`;
+  }).join('')}</tr>`;
+}
+
+// ─── TOTALS BUILDER ───────────────────────────
+function buildTotals(tableKey, items, colOrder) {
+  const result = {};
+  let labelSet = false;
+
+  if (tableKey === 'inventory') {
+    const totalQty      = items.reduce((s,i) => s + (parseFloat(i.quantity)||0), 0);
+    const totalMinStock = items.reduce((s,i) => s + (parseFloat(i.min_stock)||0), 0);
+    const totalValue    = items.reduce((s,i) => s + ((parseFloat(i.quantity)||0) * (parseFloat(i.cost_per_unit)||0)), 0);
+    const lowCount      = items.filter(i => (parseFloat(i.quantity)||0) <= (parseFloat(i.min_stock)||0)).length;
+    const cats          = [...new Set(items.map(i=>i.category).filter(Boolean))];
+
+    colOrder.forEach(col => {
+      if (!labelSet) { result[col] = `<span class="totals-tag">TOTALS</span><span class="totals-count">${items.length} items</span>`; labelSet=true; return; }
+      if (col==='quantity')      result[col] = `<span class="totals-num">${totalQty.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
+      else if (col==='min_stock')result[col] = `<span class="totals-num">${totalMinStock.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>`;
+      else if (col==='cost_per_unit') result[col] = `<span class="totals-money">₹${totalValue.toLocaleString('en-IN',{maximumFractionDigits:2})}<span class="totals-sublabel"> stock value</span></span>`;
+      else if (col==='status')   result[col] = lowCount>0 ? `<span class="totals-warn">${lowCount} low / out</span>` : `<span class="totals-ok">All OK</span>`;
+      else if (col==='category') result[col] = `<span class="totals-muted">${cats.length} categor${cats.length===1?'y':'ies'}</span>`;
+      else result[col] = '';
+    });
+
+  } else if (tableKey === 'expenses') {
+    const totalAmt  = items.reduce((s,e) => s + (parseFloat(e.amount)||0), 0);
+    const byCash    = items.filter(e=>e.paid_by==='Cash').reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    const byUPI     = items.filter(e=>e.paid_by==='UPI').reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    const cats      = [...new Set(items.map(e=>e.category).filter(Boolean))];
+    const dateRange = items.length >= 2
+      ? `${formatDate(items[items.length-1].date)} – ${formatDate(items[0].date)}`
+      : items.length === 1 ? formatDate(items[0].date) : '';
+
+    colOrder.forEach(col => {
+      if (!labelSet) { result[col] = `<span class="totals-tag">TOTALS</span><span class="totals-count">${items.length} records</span>`; labelSet=true; return; }
+      if (col==='amount')      result[col] = `<span class="totals-money">₹${totalAmt.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+      else if (col==='paid_by')result[col] = `<span class="totals-muted">${byCash>0?'Cash ₹'+Math.round(byCash).toLocaleString('en-IN'):''}${byCash>0&&byUPI>0?' · ':''}${byUPI>0?'UPI ₹'+Math.round(byUPI).toLocaleString('en-IN'):''}</span>`;
+      else if (col==='category')result[col] = `<span class="totals-muted">${cats.length} categor${cats.length===1?'y':'ies'}</span>`;
+      else if (col==='date')   result[col] = `<span class="totals-muted" style="font-size:0.75rem">${dateRange}</span>`;
+      else result[col] = '';
+    });
+
+  } else if (tableKey === 'bills') {
+    const totalAmt  = items.reduce((s,b) => s + (parseFloat(b.amount)||0), 0);
+    const paidAmt   = items.filter(b=>b.paid==='Paid').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    const unpaidAmt = totalAmt - paidAmt;
+    const types     = [...new Set(items.map(b=>b.type).filter(Boolean))];
+
+    colOrder.forEach(col => {
+      if (!labelSet) { result[col] = `<span class="totals-tag">TOTALS</span><span class="totals-count">${items.length} bills</span>`; labelSet=true; return; }
+      if (col==='amount')      result[col] = `<span class="totals-money">₹${totalAmt.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+      else if (col==='paid')   result[col] = `<span class="totals-ok">✓ ₹${Math.round(paidAmt).toLocaleString('en-IN')}</span>${unpaidAmt>0?` <span class="totals-warn">✗ ₹${Math.round(unpaidAmt).toLocaleString('en-IN')}</span>`:''}`;
+      else if (col==='type')   result[col] = `<span class="totals-muted">${types.length} type${types.length===1?'':'s'}</span>`;
+      else result[col] = '';
+    });
+  }
+
+  // Fill any unset cols
+  colOrder.forEach(col => { if (result[col]==null) result[col]=''; });
+  return result;
 }
 
 // =============================================
@@ -335,8 +400,8 @@ function onColDragEnd() {
 //  INVENTORY
 // =============================================
 async function loadInventory() {
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await sb.from('inventory').select('*').order('name');
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {data,error}=await supabase.from('inventory').select('*').order('name');
     if (!error) allInventory=data||[];
   } else { allInventory=JSON.parse(localStorage.getItem('sc_inventory')||'[]'); }
   renderInventoryTable(allInventory);
@@ -355,8 +420,8 @@ function filterInventory() { renderInventoryTable(getCurrentInventory()); }
 //  EXPENSES
 // =============================================
 async function loadExpenses() {
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await sb.from('expenses').select('*').order('date',{ascending:false});
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {data,error}=await supabase.from('expenses').select('*').order('date',{ascending:false});
     if (!error) allExpenses=data||[];
   } else { allExpenses=JSON.parse(localStorage.getItem('sc_expenses')||'[]'); }
   renderExpensesTable(allExpenses);
@@ -375,8 +440,8 @@ function filterExpenses() { renderExpensesTable(getCurrentExpenses()); }
 //  BILLS
 // =============================================
 async function loadBills() {
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error}=await sb.from('bills').select('*').order('month_year',{ascending:false});
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {data,error}=await supabase.from('bills').select('*').order('month_year',{ascending:false});
     if (!error) allBills=data||[];
   } else { allBills=JSON.parse(localStorage.getItem('sc_bills')||'[]'); }
   renderBillsTab();
@@ -400,8 +465,8 @@ function renderBillsTab() {
 //  RENT
 // =============================================
 async function loadRent() {
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data}=await sb.from('rent_config').select('*').limit(1);
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {data}=await supabase.from('rent_config').select('*').limit(1);
     rentConfig=data&&data[0]?data[0]:null;
   } else { rentConfig=JSON.parse(localStorage.getItem('sc_rent')||'null'); }
   renderRentCard();
@@ -426,9 +491,9 @@ async function saveRent() {
   const notes=document.getElementById('rent-notes').value.trim();
   if (amount<=0) return showToast('Enter a valid rent amount','error');
   const record={amount,landlord,due_day,notes};
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (rentConfig?.id){await sb.from('rent_config').update(record).eq('id',rentConfig.id);}
-    else {await sb.from('rent_config').insert([record]);}
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    if (rentConfig?.id){await supabase.from('rent_config').update(record).eq('id',rentConfig.id);}
+    else {await supabase.from('rent_config').insert([record]);}
   } else { rentConfig={...(rentConfig||{}), ...record, id:rentConfig?.id||uid()}; localStorage.setItem('sc_rent',JSON.stringify(rentConfig)); }
   closeModal('rent-modal'); renderRentCard(); renderDashboard(); showToast('Rent saved!','success');
 }
@@ -484,9 +549,9 @@ async function saveInventory() {
     supplier:document.getElementById('inv-supplier').value.trim(),
     notes:document.getElementById('inv-notes').value.trim(),
   };
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await sb.from('inventory').update(record).eq('id',id);}
-    else   {await sb.from('inventory').insert([record]);}
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    if (id){await supabase.from('inventory').update(record).eq('id',id);}
+    else   {await supabase.from('inventory').insert([record]);}
   } else {
     if (id){const idx=allInventory.findIndex(i=>i.id===id);if(idx>=0)allInventory[idx]={...allInventory[idx],...record};}
     else   {allInventory.push({...record,id:uid()});}
@@ -519,9 +584,9 @@ async function saveExpense() {
     category:document.getElementById('exp-cat').value, amount:amt,
     paid_by:document.getElementById('exp-paidby').value, notes:document.getElementById('exp-notes').value.trim(),
   };
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await sb.from('expenses').update(record).eq('id',id);}
-    else   {await sb.from('expenses').insert([record]);}
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    if (id){await supabase.from('expenses').update(record).eq('id',id);}
+    else   {await supabase.from('expenses').insert([record]);}
   } else {
     if (id){const idx=allExpenses.findIndex(e=>e.id===id);if(idx>=0)allExpenses[idx]={...allExpenses[idx],...record};}
     else   {allExpenses.push({...record,id:uid()});}
@@ -551,9 +616,9 @@ async function saveBill() {
     amount, due_date:document.getElementById('bill-duedate').value||null,
     paid:document.getElementById('bill-paid').value, notes:document.getElementById('bill-notes').value.trim(),
   };
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    if (id){await sb.from('bills').update(record).eq('id',id);}
-    else   {await sb.from('bills').insert([record]);}
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    if (id){await supabase.from('bills').update(record).eq('id',id);}
+    else   {await supabase.from('bills').insert([record]);}
   } else {
     if (id){const idx=allBills.findIndex(b=>b.id===id);if(idx>=0)allBills[idx]={...allBills[idx],...record};}
     else   {allBills.push({...record,id:uid()});}
@@ -582,8 +647,8 @@ function confirmDelete(table,id,label) {
 
 async function doDelete(table,id) {
   closeModal('confirm-modal');
-  if (sb&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    await sb.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
+  if (supabase&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    await supabase.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
   } else {
     if (table==='inventory'){allInventory=allInventory.filter(i=>i.id!==id);localStorage.setItem('sc_inventory',JSON.stringify(allInventory));}
     if (table==='expense')  {allExpenses=allExpenses.filter(e=>e.id!==id);localStorage.setItem('sc_expenses',JSON.stringify(allExpenses));}
@@ -679,12 +744,4 @@ function showToast(msg,type='success') {
   el.textContent=(type==='success'?'✅ ':type==='error'?'❌ ':'ℹ️ ')+msg;
   el.className=`toast ${type}`; el.classList.remove('hidden');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.add('hidden'),3000);
-}
-
-// ─── THEME TOGGLE ─────────────────────────────
-function toggleTheme() {
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  document.getElementById('theme-toggle').textContent = isDark ? '☀️ Light' : '🌙 Dark';
-  localStorage.setItem('sc_theme', isDark ? 'light' : 'dark');
 }
