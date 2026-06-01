@@ -3,8 +3,8 @@
 //  script.js — Row D&D + Column D&D + Sorting
 // =============================================
 
-const SUPABASE_URL  = 'https://vgjjvmsuxoveqpmkrapw.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnamp2bXN1eG92ZXFwbWtyYXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMDkyMjgsImV4cCI6MjA5MTU4NTIyOH0.4IsGZjpG7lmTw-SSpC0B0InGVop5bgl1rd-guR17cnU';
+const SUPABASE_URL  = 'https://cebhmyeelkndpyoysswg.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlYmhteWVlbGtuZHB5b3lzc3dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzYyOTYsImV4cCI6MjA5MTc1MjI5Nn0._46DfnsLqxgngXhV6xjevYkBZtBjlQCKSNIPtck9Vac';
 const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
