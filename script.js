@@ -3,8 +3,8 @@
 //  script.js — Row D&D + Column D&D + Sorting
 // =============================================
 
-const SUPABASE_URL  = 'https://cebhmyeelkndpyoysswg.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlYmhteWVlbGtuZHB5b3lzc3dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzYyOTYsImV4cCI6MjA5MTc1MjI5Nn0._46DfnsLqxgngXhV6xjevYkBZtBjlQCKSNIPtck9Vac';
+const SUPABASE_URL  = 'https://vgjjvmsuxoveqpmkrapw.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnanp2bXN1eG92ZXFwbWtyYXB3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxMDgxODcsImV4cCI6MjA1OTY4NDE4N30.yTsHKkMlFPuCGMRhFdgcDkA02YdLnvXHPiAfTmXaHUA';
 const ADMIN_USERNAME = 'sajaygeddada';
 const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
@@ -65,7 +65,10 @@ const colDefs = {
   },
   bills: {
     month_year:{ label:'Month/Year', sortKey:'month_year', render: b=>esc(b.month_year) },
-    type:      { label:'Type',       sortKey:'type',       render: b=>esc(b.type) },
+    type:      { label:'Type',       sortKey:'type',       render: b=>{
+      const icons = { Rent:'🏠', Electricity:'⚡', Water:'💧', Internet:'🌐', Gas:'🔥', Other:'📋' };
+      return `${icons[b.type]||'📋'} ${esc(b.type)}`;
+    }},
     amount:    { label:'Amount (₹)', sortKey:'amount',     render: b=>`<strong>₹${parseFloat(b.amount).toFixed(2)}</strong>` },
     due_date:  { label:'Due Date',   sortKey:'due_date',   render: b=>b.due_date?formatDate(b.due_date):'—' },
     paid:      { label:'Status',     sortKey:'paid',       render: b=>`<span class="${b.paid==='Paid'?'paid-badge':'unpaid-badge'}">${b.paid}</span>` },
@@ -198,7 +201,6 @@ function renderTable(tableKey, items, tbodyId, theadId) {
   let tfoot = table.querySelector('tfoot');
   if (!tfoot) { tfoot = document.createElement('tfoot'); table.appendChild(tfoot); }
 
-  // Per-table totals logic
   const totals = buildTotals(tableKey, items, colOrder);
   tfoot.innerHTML = `<tr class="totals-row">${colOrder.map((col, ci) => {
     const val = totals[col];
@@ -262,7 +264,6 @@ function buildTotals(tableKey, items, colOrder) {
     });
   }
 
-  // Fill any unset cols
   colOrder.forEach(col => { if (result[col]==null) result[col]=''; });
   return result;
 }
@@ -450,19 +451,33 @@ async function loadBills() {
 function renderBillsTableFull() { renderTable('bills', applySort(allBills,'bills'), 'bills-tbody', 'bills-thead'); }
 
 function renderBillsTab() {
-  const types=['Electricity','Water','Other'], ids=['elec-list','water-list','other-list'];
-  types.forEach((type,i)=>{
-    const subset=allBills.filter(b=>type==='Other'?!['Electricity','Water'].includes(b.type):b.type===type);
-    const el=document.getElementById(ids[i]);
+  // Mini card lists — Rent bills, Electricity, Water, Other (Internet/Gas/Other)
+  const cardConfig = [
+    { type: 'Rent',        id: 'rent-bills-list',  match: b => b.type === 'Rent' },
+    { type: 'Electricity', id: 'elec-list',         match: b => b.type === 'Electricity' },
+    { type: 'Water',       id: 'water-list',        match: b => b.type === 'Water' },
+    { type: 'Other',       id: 'other-list',        match: b => !['Rent','Electricity','Water'].includes(b.type) },
+  ];
+
+  cardConfig.forEach(({ id, match }) => {
+    const subset = allBills.filter(match);
+    const el = document.getElementById(id);
     if (!el) return;
-    el.innerHTML=!subset.length?'<div class="empty-state" style="padding:0.75rem;font-size:0.8rem">No records yet</div>'
-      :subset.slice(0,4).map(b=>`<div class="bill-mini-row"><span>${b.month_year}</span><span>₹${parseFloat(b.amount).toFixed(0)}</span><span class="${b.paid==='Paid'?'paid-badge':'unpaid-badge'}">${b.paid}</span></div>`).join('');
+    el.innerHTML = !subset.length
+      ? '<div class="empty-state" style="padding:0.75rem;font-size:0.8rem">No records yet</div>'
+      : subset.slice(0,4).map(b => `
+          <div class="bill-mini-row">
+            <span>${b.month_year}</span>
+            <span>₹${parseFloat(b.amount).toFixed(0)}</span>
+            <span class="${b.paid==='Paid'?'paid-badge':'unpaid-badge'}">${b.paid}</span>
+          </div>`).join('');
   });
+
   renderBillsTableFull();
 }
 
 // =============================================
-//  RENT
+//  RENT CONFIG
 // =============================================
 async function loadRent() {
   if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
@@ -529,7 +544,7 @@ function clearExpForm() {
 }
 function clearBillForm() {
   ['bill-edit-id','bill-amount','bill-notes'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('bill-type').value=billModalPreset?.type||'Electricity';
+  document.getElementById('bill-type').value=billModalPreset?.type||'Rent';
   document.getElementById('bill-paid').value='Unpaid';
   document.getElementById('bill-month').value=new Date().toISOString().slice(0,7);
   document.getElementById('bill-duedate').value='';
@@ -713,12 +728,30 @@ function renderMonthlyLog() {
   const bt=bils.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const ra=rentConfig?parseFloat(rentConfig.amount)||0:0;
   const gt=et+bt+ra;
+
+  // Break down bills by type for the summary cards
+  const rentBillsAmt = bils.filter(b=>b.type==='Rent').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const elecAmt      = bils.filter(b=>b.type==='Electricity').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const waterAmt     = bils.filter(b=>b.type==='Water').reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const otherBillAmt = bt - rentBillsAmt - elecAmt - waterAmt;
+
   let html=`<div class="stat-grid" style="margin-bottom:1.5rem">
     <div class="stat-card"><div class="stat-icon">🛒</div><div class="stat-info"><div class="stat-label">Expenses</div><div class="stat-value">₹${et.toLocaleString('en-IN')}</div></div></div>
     <div class="stat-card"><div class="stat-icon">🧾</div><div class="stat-info"><div class="stat-label">Bills</div><div class="stat-value">₹${bt.toLocaleString('en-IN')}</div></div></div>
-    <div class="stat-card"><div class="stat-icon">🏠</div><div class="stat-info"><div class="stat-label">Rent</div><div class="stat-value">₹${ra.toLocaleString('en-IN')}</div></div></div>
+    <div class="stat-card"><div class="stat-icon">🏠</div><div class="stat-info"><div class="stat-label">Rent Config</div><div class="stat-value">₹${ra.toLocaleString('en-IN')}</div></div></div>
     <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-info"><div class="stat-label">Grand Total</div><div class="stat-value" style="color:var(--accent2)">₹${gt.toLocaleString('en-IN')}</div></div></div>
   </div>`;
+
+  // Bills breakdown sub-summary if any bills exist
+  if (bils.length) {
+    html += `<div class="stat-grid" style="margin-bottom:1.5rem;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+      ${rentBillsAmt>0?`<div class="stat-card"><div class="stat-icon">🏠</div><div class="stat-info"><div class="stat-label">Rent Bills</div><div class="stat-value" style="font-size:1.1rem">₹${rentBillsAmt.toLocaleString('en-IN')}</div></div></div>`:''}
+      ${elecAmt>0?`<div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-info"><div class="stat-label">Electricity</div><div class="stat-value" style="font-size:1.1rem">₹${elecAmt.toLocaleString('en-IN')}</div></div></div>`:''}
+      ${waterAmt>0?`<div class="stat-card"><div class="stat-icon">💧</div><div class="stat-info"><div class="stat-label">Water</div><div class="stat-value" style="font-size:1.1rem">₹${waterAmt.toLocaleString('en-IN')}</div></div></div>`:''}
+      ${otherBillAmt>0?`<div class="stat-card"><div class="stat-icon">🌐</div><div class="stat-info"><div class="stat-label">Other Bills</div><div class="stat-value" style="font-size:1.1rem">₹${otherBillAmt.toLocaleString('en-IN')}</div></div></div>`:''}
+    </div>`;
+  }
+
   if (exps.length) html+=`<div class="log-section"><div class="log-section-header"><span>🛒 Expenses</span><span class="log-total">₹${et.toLocaleString('en-IN')}</span></div><div class="table-wrap" style="border:none;border-radius:0"><table class="data-table"><thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Paid By</th></tr></thead><tbody>${exps.map(e=>`<tr><td>${formatDate(e.date)}</td><td>${esc(e.description)}</td><td>${esc(e.category)}</td><td>₹${parseFloat(e.amount).toFixed(2)}</td><td>${esc(e.paid_by||'—')}</td></tr>`).join('')}</tbody></table></div></div>`;
   if (bils.length) html+=`<div class="log-section"><div class="log-section-header"><span>🧾 Bills</span><span class="log-total">₹${bt.toLocaleString('en-IN')}</span></div><div class="table-wrap" style="border:none;border-radius:0"><table class="data-table"><thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Notes</th></tr></thead><tbody>${bils.map(b=>`<tr><td>${esc(b.type)}</td><td>₹${parseFloat(b.amount).toFixed(2)}</td><td><span class="${b.paid==='Paid'?'paid-badge':'unpaid-badge'}">${b.paid}</span></td><td>${esc(b.notes||'—')}</td></tr>`).join('')}</tbody></table></div></div>`;
   if (!exps.length&&!bils.length) html+=`<div class="empty-state"><div class="empty-icon">📅</div>No records for ${formatMonth(month)}</div>`;
