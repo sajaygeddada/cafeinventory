@@ -970,6 +970,142 @@ html, body {
 /* Color for select options */
 select option { background: var(--surface2); }
 
+/* ===================== EXPENSES SUB-TABS ===================== */
+.exp-subnav {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.exp-subnav-item {
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.exp-subnav-item:hover { color: var(--text); }
+.exp-subnav-item.active { color: var(--accent2); border-bottom-color: var(--accent); }
+
+/* ===================== SALES — CALENDAR ===================== */
+.sales-cal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.sales-cal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.sales-cal-label {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+  color: var(--accent3);
+  min-width: 150px;
+  text-align: center;
+}
+
+.sales-cal-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.sales-cal-dow span {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sales-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.4rem;
+}
+
+.cal-cell {
+  aspect-ratio: 1 / 0.85;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  cursor: pointer;
+  transition: var(--transition);
+  overflow: hidden;
+}
+
+.cal-cell:hover { border-color: var(--accent); transform: translateY(-1px); }
+.cal-cell.cal-empty { background: none; border: none; cursor: default; }
+.cal-cell.cal-empty:hover { transform: none; }
+.cal-cell.has-data { background: rgba(76,175,130,0.08); border-color: rgba(76,175,130,0.3); }
+.cal-cell.cal-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.cal-daynum { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+.cal-cell.has-data .cal-daynum { color: var(--text); }
+.cal-total { font-size: 0.72rem; color: var(--success); font-weight: 600; }
+.cal-cig { font-size: 0.65rem; color: var(--muted); }
+
+/* ===================== SALES — CHART ===================== */
+.sales-chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.sales-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  justify-content: space-between;
+}
+
+.chip-group { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+.chip-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.chip-btn:hover { border-color: var(--accent); color: var(--text); }
+.chip-btn.active { background: rgba(201,125,46,0.18); border-color: var(--accent); color: var(--accent2); }
+
+.sales-chart-wrap { position: relative; height: 320px; }
+
+/* ===================== SALES — ENTRY CHECK HINT ===================== */
+.sales-check-hint { font-size: 0.78rem; color: var(--muted); margin: -0.4rem 0 1rem; min-height: 1em; }
+.sales-check-hint.ok   { color: var(--success); }
+.sales-check-hint.warn { color: var(--warning); }
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar { width: 200px; }
@@ -977,4 +1113,9 @@ select option { background: var(--surface2); }
   .bills-layout { grid-template-columns: 1fr; }
   .rent-card { grid-column: span 1; }
   .form-row { grid-template-columns: 1fr; }
+  .cal-cell { padding: 0.25rem; font-size: 0.7rem; }
+  .cal-total, .cal-cig { font-size: 0.6rem; }
+  .sales-chart-controls { flex-direction: column; }
+  .sales-cal-header { justify-content: center; }
+  .sales-cal-header .btn-primary { margin-left: 0 !important; width: 100%; order: 10; }
 }

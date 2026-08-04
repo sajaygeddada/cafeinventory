@@ -18,15 +18,15 @@
     <p class="login-sub">Inventory & Operations</p>
     <div class="login-form">
       <div class="field-group">
-        <label>Username</label>
-        <input type="text" id="login-user" placeholder="Enter username" autocomplete="username" />
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="username" />
       </div>
       <div class="field-group">
         <label>Password</label>
         <input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password" />
       </div>
       <div id="login-error" class="login-error hidden">Incorrect credentials. Try again.</div>
-      <button class="btn-primary full" onclick="handleLogin()">Sign In</button>
+      <button class="btn-primary full" id="login-btn" onclick="handleLogin()">Sign In</button>
     </div>
   </div>
 </div>
@@ -152,18 +152,69 @@
 
     <!-- ===== EXPENSES TAB ===== -->
     <div id="tab-expenses" class="tab-content hidden">
-      <div class="section-toolbar">
-        <input type="text" id="exp-search" class="search-box" placeholder="🔍 Search expenses..." oninput="filterExpenses()" />
-        <select id="exp-month-filter" class="select-box" onchange="filterExpenses()">
-          <option value="">All Months</option>
-        </select>
-        <button class="btn-primary" onclick="openModal('exp-modal')">+ Add Expense</button>
+      <div class="exp-subnav">
+        <button class="exp-subnav-item active" onclick="switchExpSubTab('log', this)">📋 Expense Log</button>
+        <button class="exp-subnav-item" onclick="switchExpSubTab('sales', this)">💰 Sales</button>
       </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead id="exp-thead"></thead>
-          <tbody id="exp-tbody"></tbody>
-        </table>
+
+      <!-- SUB-TAB: EXPENSE LOG -->
+      <div id="exp-sub-log">
+        <div class="section-toolbar">
+          <input type="text" id="exp-search" class="search-box" placeholder="🔍 Search expenses..." oninput="filterExpenses()" />
+          <select id="exp-month-filter" class="select-box" onchange="filterExpenses()">
+            <option value="">All Months</option>
+          </select>
+          <button class="btn-primary" onclick="openModal('exp-modal')">+ Add Expense</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead id="exp-thead"></thead>
+            <tbody id="exp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-TAB: SALES -->
+      <div id="exp-sub-sales" class="hidden">
+        <div class="stat-grid" id="sales-summary"></div>
+
+        <div class="sales-cal-card">
+          <div class="sales-cal-header">
+            <button class="btn-sm" onclick="shiftSalesMonth(-1)">‹ Prev</button>
+            <span id="sales-cal-label" class="sales-cal-label"></span>
+            <button class="btn-sm" onclick="shiftSalesMonth(1)">Next ›</button>
+            <button class="btn-primary" style="margin-left:auto" onclick="openSalesEntry(new Date().toISOString().split('T')[0])">+ Add / Edit Today's Sales</button>
+          </div>
+          <div class="sales-cal-dow">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div id="sales-cal-grid" class="sales-cal-grid"></div>
+        </div>
+
+        <div class="sales-chart-card">
+          <div class="sales-chart-controls">
+            <div class="chip-group" id="sales-metric-group">
+              <button class="chip-btn sales-metric-btn active" onclick="setSalesMetric('all', this)">All</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('total', this)">Total</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('general', this)">General</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('cigarettes', this)">Cigarettes</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('milk', this)">Milk</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('cash', this)">Cash</button>
+              <button class="chip-btn sales-metric-btn" onclick="setSalesMetric('online', this)">Online</button>
+            </div>
+            <div class="chip-group">
+              <button class="chip-btn sales-period-btn" onclick="setSalesPeriod('weekly', this)">Weekly</button>
+              <button class="chip-btn sales-period-btn active" onclick="setSalesPeriod('monthly', this)">Monthly</button>
+              <button class="chip-btn sales-period-btn" onclick="setSalesPeriod('quarterly', this)">Quarterly</button>
+              <button class="chip-btn sales-period-btn" onclick="setSalesPeriod('yearly', this)">Yearly</button>
+            </div>
+            <div class="chip-group">
+              <button class="chip-btn sales-type-btn active" onclick="setSalesChartType('line', this)">📈 Line</button>
+              <button class="chip-btn sales-type-btn" onclick="setSalesChartType('bar', this)">📊 Bar</button>
+            </div>
+          </div>
+          <div class="sales-chart-wrap"><canvas id="sales-chart-canvas"></canvas></div>
+        </div>
       </div>
     </div>
 
@@ -390,6 +441,57 @@
   </div>
 </div>
 
+<!-- SALES MODAL -->
+<div id="sales-modal" class="modal-overlay hidden">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 id="sales-modal-title">Add Sales</h3>
+      <button class="modal-close" onclick="closeModal('sales-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sales-date" />
+      <div class="field-group">
+        <label>Total Sales (₹) *</label>
+        <input type="number" id="sales-total" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>General (₹)</label>
+          <input type="number" id="sales-general" placeholder="0.00" min="0" step="0.01" />
+        </div>
+        <div class="field-group">
+          <label>Cigarettes (₹)</label>
+          <input type="number" id="sales-cigarettes" placeholder="0.00" min="0" step="0.01" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Milk (₹)</label>
+        <input type="number" id="sales-milk" placeholder="0.00" min="0" step="0.01" />
+      </div>
+      <div class="form-row">
+        <div class="field-group">
+          <label>Cash (₹)</label>
+          <input type="number" id="sales-cash" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+        </div>
+        <div class="field-group">
+          <label>Online (₹)</label>
+          <input type="number" id="sales-online" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+        </div>
+      </div>
+      <div id="sales-check-hint" class="sales-check-hint"></div>
+      <div class="field-group">
+        <label>Notes</label>
+        <input type="text" id="sales-notes" placeholder="Optional — e.g. festival day, closed early" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-danger hidden" id="sales-delete-btn" style="margin-right:auto">Delete</button>
+      <button class="btn-secondary" onclick="closeModal('sales-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveSalesEntry()">Save Sales</button>
+    </div>
+  </div>
+</div>
+
 <!-- RENT MODAL -->
 <div id="rent-modal" class="modal-overlay hidden">
   <div class="modal modal-sm">
@@ -498,6 +600,8 @@
 
 <!-- Supabase SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Chart.js (sales trend chart) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="script.js"></script>
 </body>
 </html>

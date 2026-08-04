@@ -1,19 +1,21 @@
 // =============================================
 //  Sajay's Café — Inventory Manager
-//  script.js — Row D&D + Column D&D + Sorting
+//  script.js — Row D&D + Column D&D + Sorting + Sales Tracker
 // =============================================
 
 const SUPABASE_URL  = 'https://cebhmyeelkndpyoysswg.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlYmhteWVlbGtuZHB5b3lzc3dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzYyOTYsImV4cCI6MjA5MTc1MjI5Nn0._46DfnsLqxgngXhV6xjevYkBZtBjlQCKSNIPtck9Vac';
-const ADMIN_USERNAME = 'sajaygeddada';
-const DEFAULT_PASSWORD_HASH = btoa('sajaysCafe@2026');
 
 let sbClient;
 try { sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
 catch(e) { console.warn('Supabase offline mode', e); }
 
 // ─── DATA STATE ───────────────────────────────
-let allInventory = [], allExpenses = [], allBills = [], rentConfig = null, billModalPreset = {};
+let allInventory = [], allExpenses = [], allBills = [], allDailySales = [], rentConfig = null, billModalPreset = {};
+
+// ─── SALES TAB STATE ───────────────────────────
+const salesCal   = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
+const salesChart = { metric: 'all', period: 'monthly', type: 'line', chartInstance: null };
 
 // ─── SORT STATE ───────────────────────────────
 const sortState = {
@@ -99,20 +101,27 @@ window.addEventListener('DOMContentLoaded', () => {
   updateDBStatus();
 });
 
-// ─── AUTH ─────────────────────────────────────
-function checkSession() { if (sessionStorage.getItem('sc_auth')==='ok') showApp(); }
+// ─── AUTH (Supabase Auth) ──────────────────────
+async function checkSession() {
+  if (!sbClient) return;
+  const { data:{ session } } = await sbClient.auth.getSession();
+  if (session) showApp();
+}
 
-function handleLogin() {
-  const user = document.getElementById('login-user').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  if (user !== ADMIN_USERNAME) return showLoginError();
-  if (btoa(pass) !== (localStorage.getItem('sc_pw')||DEFAULT_PASSWORD_HASH)) return showLoginError();
+async function handleLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) return showLoginError();
+  const btn = document.getElementById('login-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Signing in…'; }
+  const { error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+  if (btn) { btn.disabled=false; btn.textContent='Sign In'; }
+  if (error) return showLoginError();
   document.getElementById('login-error').classList.add('hidden');
-  sessionStorage.setItem('sc_auth','ok');
   showApp();
 }
 function showLoginError() { document.getElementById('login-error').classList.remove('hidden'); document.getElementById('login-pass').value=''; }
-function handleLogout() { sessionStorage.removeItem('sc_auth'); location.reload(); }
+async function handleLogout() { await sbClient.auth.signOut(); location.reload(); }
 function showApp() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); loadAll(); }
 document.addEventListener('keydown', e => { if (e.key==='Enter' && !document.getElementById('login-screen').classList.contains('hidden')) handleLogin(); });
 
@@ -124,7 +133,7 @@ async function updateDBStatus() {
 }
 
 async function loadAll() {
-  await Promise.all([loadInventory(),loadExpenses(),loadBills(),loadRent()]);
+  await Promise.all([loadInventory(),loadExpenses(),loadBills(),loadRent(),loadDailySales()]);
   renderDashboard(); populateMonthFilters(); populateLogMonths();
 }
 
@@ -514,6 +523,239 @@ async function saveRent() {
 }
 
 // =============================================
+//  DAILY SALES  (Expenses → Sales sub-tab)
+// =============================================
+async function loadDailySales() {
+  if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {data,error}=await sbClient.from('daily_sales').select('*').order('sale_date');
+    if (!error) allDailySales=data||[];
+  } else { allDailySales=JSON.parse(localStorage.getItem('sc_sales')||'[]'); }
+}
+
+function findSalesByDate(dateStr) { return allDailySales.find(s=>s.sale_date===dateStr); }
+
+function switchExpSubTab(name, btn) {
+  document.getElementById('exp-sub-log').classList.toggle('hidden', name!=='log');
+  document.getElementById('exp-sub-sales').classList.toggle('hidden', name!=='sales');
+  document.querySelectorAll('.exp-subnav-item').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if (name==='sales') { renderSalesCalendar(); renderSalesSummary(); renderSalesChart(); }
+}
+
+// ── CALENDAR ──
+function shiftSalesMonth(delta) {
+  salesCal.month += delta;
+  if (salesCal.month<0)  { salesCal.month=11; salesCal.year--; }
+  if (salesCal.month>11) { salesCal.month=0;  salesCal.year++; }
+  renderSalesCalendar();
+}
+
+function renderSalesCalendar() {
+  const y=salesCal.year, m=salesCal.month;
+  const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('sales-cal-label').textContent = `${monthNames[m]} ${y}`;
+
+  const firstDow     = new Date(y,m,1).getDay();
+  const daysInMonth  = new Date(y,m+1,0).getDate();
+  const todayStr     = new Date().toISOString().split('T')[0];
+
+  let cells='';
+  for (let i=0;i<firstDow;i++) cells+=`<div class="cal-cell cal-empty"></div>`;
+  for (let d=1; d<=daysInMonth; d++) {
+    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const rec     = findSalesByDate(dateStr);
+    const isToday = dateStr===todayStr;
+    cells += `<div class="cal-cell${rec?' has-data':''}${isToday?' cal-today':''}" onclick="openSalesEntry('${dateStr}')" title="${rec?'Click to edit this day':'Click to add sales for this day'}">
+      <span class="cal-daynum">${d}</span>
+      ${rec ? `<span class="cal-total">₹${Math.round(rec.total||0).toLocaleString('en-IN')}</span><span class="cal-cig">🚬 ₹${Math.round(rec.cigarettes||0).toLocaleString('en-IN')}</span>` : ''}
+    </div>`;
+  }
+  document.getElementById('sales-cal-grid').innerHTML = cells;
+}
+
+// ── SUMMARY CARDS ──
+function renderSalesSummary() {
+  const todayStr  = new Date().toISOString().split('T')[0];
+  const thisMonth = todayStr.slice(0,7);
+  const todayRec  = findSalesByDate(todayStr);
+  const monthRecs = allDailySales.filter(s=>s.sale_date.startsWith(thisMonth));
+  const monthTotal  = monthRecs.reduce((s,r)=>s+(parseFloat(r.total)||0),0);
+  const monthCash   = monthRecs.reduce((s,r)=>s+(parseFloat(r.cash)||0),0);
+  const monthOnline = monthRecs.reduce((s,r)=>s+(parseFloat(r.online)||0),0);
+  const avgDaily    = monthRecs.length ? monthTotal/monthRecs.length : 0;
+
+  document.getElementById('sales-summary').innerHTML = `
+    <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-info"><div class="stat-label">Today's Sales</div><div class="stat-value">${todayRec?'₹'+Math.round(todayRec.total).toLocaleString('en-IN'):'—'}</div></div></div>
+    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-info"><div class="stat-label">This Month</div><div class="stat-value">₹${monthTotal.toLocaleString('en-IN')}</div></div></div>
+    <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-info"><div class="stat-label">Daily Average</div><div class="stat-value">₹${Math.round(avgDaily).toLocaleString('en-IN')}</div></div></div>
+    <div class="stat-card"><div class="stat-icon">💳</div><div class="stat-info"><div class="stat-label">Cash / Online (Month)</div><div class="stat-value" style="font-size:1.05rem">₹${Math.round(monthCash).toLocaleString('en-IN')} / ₹${Math.round(monthOnline).toLocaleString('en-IN')}</div></div></div>
+  `;
+}
+
+// ── ENTRY MODAL ──
+function openSalesEntry(dateStr) {
+  const rec = findSalesByDate(dateStr);
+  document.getElementById('sales-modal-title').textContent = rec ? 'Edit Sales — '+formatDate(dateStr) : 'Add Sales — '+formatDate(dateStr);
+  document.getElementById('sales-date').value       = dateStr;
+  document.getElementById('sales-total').value      = rec?.total ?? '';
+  document.getElementById('sales-general').value    = rec?.general ?? '';
+  document.getElementById('sales-cigarettes').value = rec?.cigarettes ?? '';
+  document.getElementById('sales-milk').value       = rec?.milk ?? '';
+  document.getElementById('sales-cash').value       = rec?.cash ?? '';
+  document.getElementById('sales-online').value     = rec?.online ?? '';
+  document.getElementById('sales-notes').value      = rec?.notes ?? '';
+  const delBtn = document.getElementById('sales-delete-btn');
+  delBtn.classList.toggle('hidden', !rec);
+  if (rec) delBtn.onclick = () => confirmDelete('sales', rec.id, 'the sales entry for '+formatDate(dateStr));
+  updateSalesCheckHint();
+  document.getElementById('sales-modal').classList.remove('hidden');
+}
+
+function updateSalesCheckHint() {
+  const cash   = parseFloat(document.getElementById('sales-cash').value)||0;
+  const online = parseFloat(document.getElementById('sales-online').value)||0;
+  const total  = parseFloat(document.getElementById('sales-total').value)||0;
+  const hint = document.getElementById('sales-check-hint');
+  if (!hint) return;
+  const sum = cash+online;
+  if (!total && !sum) { hint.textContent=''; hint.className='sales-check-hint'; return; }
+  const diff = total - sum;
+  const close = Math.abs(diff) < 0.5;
+  hint.textContent = `Cash + Online = ₹${sum.toLocaleString('en-IN')}${close ? ' — matches Total ✓' : ` (₹${Math.abs(diff).toLocaleString('en-IN')} ${diff>0?'more than':'less than'} Total)`}`;
+  hint.className = 'sales-check-hint ' + (close ? 'ok' : 'warn');
+}
+
+async function saveSalesEntry() {
+  const sale_date = document.getElementById('sales-date').value;
+  if (!sale_date) return showToast('Pick a date first','error');
+  const record = {
+    sale_date,
+    total:      parseFloat(document.getElementById('sales-total').value)||0,
+    general:    parseFloat(document.getElementById('sales-general').value)||0,
+    cigarettes: parseFloat(document.getElementById('sales-cigarettes').value)||0,
+    milk:       parseFloat(document.getElementById('sales-milk').value)||0,
+    cash:       parseFloat(document.getElementById('sales-cash').value)||0,
+    online:     parseFloat(document.getElementById('sales-online').value)||0,
+    notes:      document.getElementById('sales-notes').value.trim(),
+  };
+  if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    const {error} = await sbClient.from('daily_sales').upsert([record], {onConflict:'sale_date'});
+    if (error) return showToast('Save failed: '+error.message,'error');
+  } else {
+    const idx=allDailySales.findIndex(s=>s.sale_date===sale_date);
+    if (idx>=0) allDailySales[idx]={...allDailySales[idx],...record};
+    else allDailySales.push({...record,id:uid()});
+    localStorage.setItem('sc_sales',JSON.stringify(allDailySales));
+  }
+  closeModal('sales-modal');
+  await loadDailySales();
+  renderSalesCalendar(); renderSalesSummary(); renderSalesChart();
+  showToast('Sales entry saved!','success');
+}
+
+async function deleteSalesEntry() {
+  const sale_date = document.getElementById('sales-date').value;
+  if (!findSalesByDate(sale_date)) return;
+  closeModal('sales-modal');
+  if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
+    await sbClient.from('daily_sales').delete().eq('sale_date', sale_date);
+  } else {
+    allDailySales=allDailySales.filter(s=>s.sale_date!==sale_date);
+    localStorage.setItem('sc_sales',JSON.stringify(allDailySales));
+  }
+  await loadDailySales();
+  renderSalesCalendar(); renderSalesSummary(); renderSalesChart();
+  showToast('Entry deleted','success');
+}
+
+// ── TREND CHART ──
+function setSalesMetric(metric, btn) {
+  salesChart.metric = metric;
+  document.querySelectorAll('.sales-metric-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSalesChart();
+}
+function setSalesPeriod(period, btn) {
+  salesChart.period = period;
+  document.querySelectorAll('.sales-period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSalesChart();
+}
+function setSalesChartType(type, btn) {
+  salesChart.type = type;
+  document.querySelectorAll('.sales-type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderSalesChart();
+}
+
+function bucketKeyForPeriod(dateStr, period) {
+  const d = new Date(dateStr+'T00:00:00');
+  if (period==='weekly') {
+    const daysSinceEpoch = Math.floor(d.getTime()/86400000);
+    const weekIndex = Math.floor((daysSinceEpoch+4)/7);
+    const weekStart = new Date(weekIndex*7*86400000 - 4*86400000);
+    return weekStart.toISOString().slice(0,10);
+  }
+  if (period==='monthly')   return dateStr.slice(0,7);
+  if (period==='quarterly') return `${d.getFullYear()}-Q${Math.floor(d.getMonth()/3)+1}`;
+  return String(d.getFullYear()); // yearly
+}
+
+function formatBucketLabel(key, period) {
+  if (period==='weekly')    return 'Wk '+formatDate(key);
+  if (period==='monthly')   return formatMonth(key);
+  return key; // quarterly "2026-Q3" and yearly "2026" are already readable
+}
+
+function aggregateSales() {
+  const period = salesChart.period;
+  const buckets = {};
+  allDailySales.forEach(r=>{
+    const key = bucketKeyForPeriod(r.sale_date, period);
+    if (!buckets[key]) buckets[key]={total:0,general:0,cigarettes:0,milk:0,cash:0,online:0};
+    ['total','general','cigarettes','milk','cash','online'].forEach(f=>buckets[key][f]+=parseFloat(r[f])||0);
+  });
+  const keys = Object.keys(buckets).sort();
+  const recentKeys = keys.slice(-12); // keep the chart readable — last 12 buckets
+  return { labels: recentKeys, data: recentKeys.map(k=>buckets[k]) };
+}
+
+function renderSalesChart() {
+  const canvas = document.getElementById('sales-chart-canvas');
+  if (!canvas || typeof Chart==='undefined') return;
+  const {labels, data} = aggregateSales();
+  const metric = salesChart.metric;
+  const fields = metric==='all' ? ['total','general','cigarettes','milk','cash','online'] : [metric];
+  const fieldMeta = {
+    total:{label:'Total',color:'#e6a455'}, general:{label:'General',color:'#c97d2e'},
+    cigarettes:{label:'Cigarettes',color:'#f2c47a'}, milk:{label:'Milk',color:'#8a7060'},
+    cash:{label:'Cash',color:'#4caf82'}, online:{label:'Online',color:'#5a9bd6'},
+  };
+  const isBar = (salesChart.type||'line')==='bar';
+  const datasets = fields.map(f=>({
+    label: fieldMeta[f].label,
+    data: data.map(d=>d[f]),
+    borderColor: fieldMeta[f].color,
+    backgroundColor: isBar ? fieldMeta[f].color+'99' : fieldMeta[f].color+'33',
+    tension: 0.35, fill: !isBar, borderWidth: 2, pointRadius: 3, pointBackgroundColor: fieldMeta[f].color,
+  }));
+
+  if (salesChart.chartInstance) salesChart.chartInstance.destroy();
+  salesChart.chartInstance = new Chart(canvas.getContext('2d'), {
+    type: salesChart.type||'line',
+    data: { labels: labels.map(k=>formatBucketLabel(k,salesChart.period)), datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ color:'#8a7060' } } },
+      scales:{
+        x:{ ticks:{ color:'#8a7060' }, grid:{ color:'rgba(58,46,36,0.5)' } },
+        y:{ ticks:{ color:'#8a7060' }, grid:{ color:'rgba(58,46,36,0.5)' }, beginAtZero:true },
+      }
+    }
+  });
+}
+
+// =============================================
 //  MODALS
 // =============================================
 function openModal(id, preset) {
@@ -663,15 +905,18 @@ function confirmDelete(table,id,label) {
 async function doDelete(table,id) {
   closeModal('confirm-modal');
   if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    await sbClient.from(table==='inventory'?'inventory':table==='expense'?'expenses':'bills').delete().eq('id',id);
+    const tbl = table==='inventory'?'inventory':table==='expense'?'expenses':table==='sales'?'daily_sales':'bills';
+    await sbClient.from(tbl).delete().eq('id',id);
   } else {
     if (table==='inventory'){allInventory=allInventory.filter(i=>i.id!==id);localStorage.setItem('sc_inventory',JSON.stringify(allInventory));}
     if (table==='expense')  {allExpenses=allExpenses.filter(e=>e.id!==id);localStorage.setItem('sc_expenses',JSON.stringify(allExpenses));}
     if (table==='bill')     {allBills=allBills.filter(b=>b.id!==id);localStorage.setItem('sc_bills',JSON.stringify(allBills));}
+    if (table==='sales')    {allDailySales=allDailySales.filter(s=>s.id!==id);localStorage.setItem('sc_sales',JSON.stringify(allDailySales));}
   }
   if (table==='inventory'){await loadInventory();renderDashboard();}
   if (table==='expense')  {await loadExpenses();renderDashboard();}
   if (table==='bill')     {await loadBills();renderDashboard();}
+  if (table==='sales')    {closeModal('sales-modal');await loadDailySales();renderSalesCalendar();renderSalesSummary();renderSalesChart();}
   showToast('Deleted successfully','success');
 }
 
