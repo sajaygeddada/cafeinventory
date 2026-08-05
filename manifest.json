@@ -1,0 +1,15 @@
+{
+  "name": "Sajay's Cafe",
+  "short_name": "Sajay's Cafe",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f0b08",
+  "theme_color": "#0f0b08",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
