@@ -10,12 +10,229 @@ let sbClient;
 try { sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
 catch(e) { console.warn('Supabase offline mode', e); }
 
+// =============================================
+//  THEME ENGINE
+// =============================================
+// ── color math ──
+function hexToRgb(hex) {
+  hex = hex.replace('#','');
+  if (hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+  const n = parseInt(hex,16);
+  return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+}
+function rgbToHex(r,g,b) {
+  const c = v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0');
+  return '#'+c(r)+c(g)+c(b);
+}
+function mixHex(hex1,hex2,t) {
+  const a=hexToRgb(hex1), b=hexToRgb(hex2);
+  return rgbToHex(a.r+(b.r-a.r)*t, a.g+(b.g-a.g)*t, a.b+(b.b-a.b)*t);
+}
+function relLuminance(hex) {
+  const {r,g,b}=hexToRgb(hex);
+  const [R,G,B]=[r,g,b].map(v=>{ v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); });
+  return 0.2126*R+0.7152*G+0.0722*B;
+}
+function hexToHsl(hex) {
+  let {r,g,b}=hexToRgb(hex); r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h,s,l=(max+min)/2;
+  if (max===min) { h=s=0; }
+  else {
+    const d=max-min;
+    s = l>0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max){ case r: h=(g-b)/d+(g<b?6:0); break; case g: h=(b-r)/d+2; break; default: h=(r-g)/d+4; }
+    h/=6;
+  }
+  return {h:h*360, s:s*100, l:l*100};
+}
+function hslToHex(h,s,l) {
+  h=((h%360)+360)%360; h/=360; s/=100; l/=100;
+  let r,g,b;
+  if (s===0) { r=g=b=l; }
+  else {
+    const hue2rgb=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; };
+    const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+    r=hue2rgb(p,q,h+1/3); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1/3);
+  }
+  return rgbToHex(r*255,g*255,b*255);
+}
+
+// ── full theme derivation from a small base ──
+// base: {bg,surface,primary,accent,text, muted?,success?,warning?,danger?,info?}
+function deriveFullTheme(base) {
+  const isDark = relLuminance(base.bg) < 0.5;
+  const edge = isDark ? '#ffffff' : '#000000';
+  return {
+    bg: base.bg, surface: base.surface,
+    surface2: mixHex(base.surface, edge, isDark?0.07:0.05),
+    surface3: mixHex(base.surface, edge, isDark?0.14:0.09),
+    border:   mixHex(base.surface, base.text, 0.16),
+    accent:   base.primary, accent2: base.accent,
+    accent3:  mixHex(base.accent, '#ffffff', 0.35),
+    text:     base.text,
+    muted:    base.muted || mixHex(base.text, base.surface, 0.45),
+    success:  base.success || '#22c55e',
+    warning:  base.warning || '#eab308',
+    danger:   base.danger  || '#ef4444',
+    info:     base.info    || '#0ea5e9',
+  };
+}
+
+// ── 13 themes: your original look + the 12-theme set ──
+const THEME_PRESETS = {
+  'dakhni-amber': { label:'☕ Dakhni Amber (Original)', isRaw:true, vars:{
+    bg:'#0f0b08',surface:'#1a1410',surface2:'#231c16',surface3:'#2e251d',border:'#3a2e24',
+    accent:'#c97d2e',accent2:'#e6a455',accent3:'#f2c47a',danger:'#c94040',success:'#4caf82',
+    warning:'#e8a030',info:'#5a9bd6',text:'#f0e8df',muted:'#8a7060' } },
+  'coffee-house': { label:'☕ Coffee House', base:{bg:'#F8F5F2',surface:'#FFFFFF',primary:'#6F4E37',accent:'#C49A6C',text:'#2B2B2B'} },
+  'matcha':       { label:'🌿 Matcha',       base:{bg:'#F4F9F3',surface:'#FFFFFF',primary:'#4CAF50',accent:'#A5D6A7',text:'#1F2937'} },
+  'ocean':        { label:'🌊 Ocean',        base:{bg:'#F2F8FC',surface:'#FFFFFF',primary:'#0288D1',accent:'#4FC3F7',text:'#263238'} },
+  'lavender':     { label:'💜 Lavender',     base:{bg:'#F7F4FB',surface:'#FFFFFF',primary:'#7E57C2',accent:'#B39DDB',text:'#2D2D2D'} },
+  'sunset':       { label:'🌅 Sunset',       base:{bg:'#FFF3E0',surface:'#FFFFFF',primary:'#F4511E',accent:'#FFB74D',text:'#333333'} },
+  'sapphire':     { label:'💎 Sapphire',     base:{bg:'#F4F8FF',surface:'#FFFFFF',primary:'#1565C0',accent:'#64B5F6',text:'#263238'} },
+  'midnight':     { label:'🌑 Midnight',     base:{bg:'#121212',surface:'#1E1E1E',primary:'#3B82F6',accent:'#60A5FA',text:'#F8FAFC'} },
+  'espresso':     { label:'☕ Espresso',     base:{bg:'#1B1612',surface:'#2A221D',primary:'#8D6E63',accent:'#D7CCC8',text:'#F5F5F5'} },
+  'galaxy':       { label:'🌌 Galaxy',       base:{bg:'#0D1117',surface:'#161B22',primary:'#58A6FF',accent:'#A371F7',text:'#F0F6FC'} },
+  'forest-night': { label:'🌲 Forest Night', base:{bg:'#101914',surface:'#1A2A21',primary:'#43A047',accent:'#81C784',text:'#F5F5F5'} },
+  'luxury-black': { label:'🖤 Luxury Black', base:{bg:'#0A0A0A',surface:'#171717',primary:'#D4AF37',accent:'#F5F5F5',text:'#F0F0F0'} },
+  'cyberpunk':    { label:'⚡ Cyberpunk',    base:{bg:'#0A0F1F',surface:'#141B2D',primary:'#00E5FF',accent:'#FF00FF',text:'#F0F6FC'} },
+};
+
+const currentTheme = { key:'dakhni-amber', customBase:null };
+const CHART_FIELDS = ['total','general','cigarettes','milk','cash','online'];
+let chartColors = {};
+
+function getThemeVars(key, customBase) {
+  if (key==='custom' && customBase) return deriveFullTheme(customBase);
+  const preset = THEME_PRESETS[key];
+  if (!preset) return THEME_PRESETS['dakhni-amber'].vars;
+  return preset.isRaw ? preset.vars : deriveFullTheme(preset.base);
+}
+
+function generateChartPalette(primaryHex, count) {
+  const {h,s} = hexToHsl(primaryHex);
+  const useS = Math.max(45, Math.min(s,70));
+  return Array.from({length:count}, (_,i)=> hslToHex(h+i*(360/count), useS, 58));
+}
+
+function initChartColors() {
+  let saved=null;
+  try { saved = JSON.parse(localStorage.getItem('sc_chart_colors')); } catch(e){}
+  const vars = getThemeVars(currentTheme.key, currentTheme.customBase);
+  const palette = generateChartPalette(vars.accent, CHART_FIELDS.length);
+  CHART_FIELDS.forEach((f,i)=>{ chartColors[f] = (saved&&saved[f]) ? saved[f] : palette[i]; });
+}
+
+function setChartColor(field, hex) {
+  chartColors[field]=hex;
+  const saved = (()=>{ try{return JSON.parse(localStorage.getItem('sc_chart_colors'))||{};}catch(e){return {};} })();
+  saved[field]=hex;
+  localStorage.setItem('sc_chart_colors', JSON.stringify(saved));
+  if (typeof renderSalesChart==='function') renderSalesChart();
+}
+
+function resetChartColors() {
+  localStorage.removeItem('sc_chart_colors');
+  initChartColors();
+  renderChartColorPickers();
+  if (typeof renderSalesChart==='function') renderSalesChart();
+}
+
+function applyThemeVars(vars) {
+  const root = document.documentElement.style;
+  Object.entries(vars).forEach(([k,v])=> root.setProperty('--'+k, v));
+}
+
+function applyTheme(key, customBase) {
+  applyThemeVars(getThemeVars(key, customBase));
+  currentTheme.key = key;
+  currentTheme.customBase = key==='custom' ? customBase : null;
+  localStorage.setItem('sc_theme', JSON.stringify({key, customBase: currentTheme.customBase}));
+  initChartColors();
+  if (typeof renderThemeGrid==='function') renderThemeGrid();
+  if (typeof renderChartColorPickers==='function') renderChartColorPickers();
+  if (typeof renderSalesChart==='function' && document.getElementById('sales-chart-canvas')) renderSalesChart();
+}
+
+function initTheme() {
+  let saved=null;
+  try { saved = JSON.parse(localStorage.getItem('sc_theme')); } catch(e){}
+  if (saved && saved.key) applyTheme(saved.key, saved.customBase);
+  else applyTheme('dakhni-amber');
+}
+initTheme(); // apply immediately so even the login screen is themed
+
+// ── theme UI ──
+function renderThemeGrid() {
+  const grid = document.getElementById('theme-preset-grid');
+  if (!grid) return;
+  grid.innerHTML = Object.entries(THEME_PRESETS).map(([key,t])=>{
+    const v = t.isRaw ? t.vars : deriveFullTheme(t.base);
+    const active = currentTheme.key===key;
+    return `<button class="theme-swatch${active?' active':''}" onclick="applyTheme('${key}')" title="${t.label}">
+      <span class="theme-swatch-preview" style="background:${v.bg}">
+        <span style="background:${v.accent}"></span><span style="background:${v.accent2}"></span><span style="background:${v.surface}"></span>
+      </span>
+      <span class="theme-swatch-label">${t.label}</span>
+    </button>`;
+  }).join('');
+}
+
+function openThemeModal() {
+  const v = getThemeVars(currentTheme.key, currentTheme.customBase);
+  document.getElementById('custom-bg').value      = v.bg;
+  document.getElementById('custom-surface').value = v.surface;
+  document.getElementById('custom-primary').value = v.accent;
+  document.getElementById('custom-accent').value  = v.accent2;
+  document.getElementById('custom-text').value    = v.text;
+  document.getElementById('custom-muted').value   = v.muted;
+  document.getElementById('custom-success').value = v.success;
+  document.getElementById('custom-warning').value = v.warning;
+  document.getElementById('custom-danger').value  = v.danger;
+  document.getElementById('custom-info').value    = v.info;
+  renderThemeGrid();
+  renderChartColorPickers();
+  openModal('theme-modal');
+}
+
+function applyCustomTheme() {
+  const g = id => document.getElementById(id).value;
+  applyTheme('custom', {
+    bg: g('custom-bg'), surface: g('custom-surface'),
+    primary: g('custom-primary'), accent: g('custom-accent'),
+    text: g('custom-text'), muted: g('custom-muted'),
+    success: g('custom-success'), warning: g('custom-warning'),
+    danger: g('custom-danger'), info: g('custom-info'),
+  });
+}
+
+function renderChartColorPickers() {
+  const wrap = document.getElementById('chart-color-pickers');
+  if (!wrap) return;
+  const labels = {total:'Total',general:'General',cigarettes:'Cigarettes',milk:'Milk (packets)',cash:'Cash',online:'Online'};
+  wrap.innerHTML = CHART_FIELDS.map(f=>`
+    <div class="color-pick-row">
+      <label>${labels[f]}</label>
+      <input type="color" value="${chartColors[f]||'#c97d2e'}" oninput="setChartColor('${f}', this.value)" />
+    </div>`).join('');
+}
+
 // ─── DATA STATE ───────────────────────────────
 let allInventory = [], allExpenses = [], allBills = [], allDailySales = [], rentConfig = null, billModalPreset = {};
 
 // ─── SALES TAB STATE ───────────────────────────
 const salesCal   = { year: new Date().getFullYear(), month: new Date().getMonth() }; // month: 0-11
-const salesChart = { metric: 'all', period: 'monthly', type: 'line', chartInstance: null };
+const salesChart = { metric: 'all', period: 'monthly', type: 'line', weekday: 'all', monthFilter: new Date().toISOString().slice(0,7), chartInstance: null };
+
+function getMismatchFlags(rec) {
+  const total=parseFloat(rec.total)||0, cash=parseFloat(rec.cash)||0, online=parseFloat(rec.online)||0;
+  const general=parseFloat(rec.general)||0, cig=parseFloat(rec.cigarettes)||0;
+  const EPS=0.5;
+  const cashOnlineMismatch = !!((total||cash||online) && Math.abs(total-(cash+online))>EPS);
+  const genCigMismatch     = !!((total||general||cig) && Math.abs(total-(general+cig))>EPS);
+  return { cashOnlineMismatch, genCigMismatch, any: cashOnlineMismatch||genCigMismatch };
+}
 
 // ─── SORT STATE ───────────────────────────────
 const sortState = {
@@ -539,7 +756,10 @@ function switchExpSubTab(name, btn) {
   document.getElementById('exp-sub-sales').classList.toggle('hidden', name!=='sales');
   document.querySelectorAll('.exp-subnav-item').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  if (name==='sales') { renderSalesCalendar(); renderSalesSummary(); renderSalesChart(); }
+  if (name==='sales') {
+    document.getElementById('sales-month-filter').value = salesChart.monthFilter;
+    renderSalesCalendar(); renderSalesSummary(); renderSalesChart(); renderChartColorPickers();
+  }
 }
 
 // ── CALENDAR ──
@@ -565,9 +785,14 @@ function renderSalesCalendar() {
     const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const rec     = findSalesByDate(dateStr);
     const isToday = dateStr===todayStr;
-    cells += `<div class="cal-cell${rec?' has-data':''}${isToday?' cal-today':''}" onclick="openSalesEntry('${dateStr}')" title="${rec?'Click to edit this day':'Click to add sales for this day'}">
+    const mism    = rec ? getMismatchFlags(rec) : null;
+    const flagCls = mism&&mism.any ? ' cal-mismatch' : '';
+    cells += `<div class="cal-cell${rec?' has-data':''}${isToday?' cal-today':''}${flagCls}" onclick="openSalesEntry('${dateStr}')" title="${rec?(mism.any?'⚠ Mismatch — click to review and correct':'Click to edit this day'):'Click to add sales for this day'}">
       <span class="cal-daynum">${d}</span>
-      ${rec ? `<span class="cal-total">₹${Math.round(rec.total||0).toLocaleString('en-IN')}</span><span class="cal-cig">🚬 ₹${Math.round(rec.cigarettes||0).toLocaleString('en-IN')}</span>` : ''}
+      ${rec ? `<span class="cal-total">₹${Math.round(rec.total||0).toLocaleString('en-IN')}</span>
+        <span class="cal-line">Gen ₹${Math.round(rec.general||0).toLocaleString('en-IN')}</span>
+        <span class="cal-line">🚬 ₹${Math.round(rec.cigarettes||0).toLocaleString('en-IN')}</span>
+        <span class="cal-line">🥛 ${Math.round(rec.milk||0)} pkt</span>` : ''}
     </div>`;
   }
   document.getElementById('sales-cal-grid').innerHTML = cells;
@@ -607,22 +832,23 @@ function openSalesEntry(dateStr) {
   const delBtn = document.getElementById('sales-delete-btn');
   delBtn.classList.toggle('hidden', !rec);
   if (rec) delBtn.onclick = () => confirmDelete('sales', rec.id, 'the sales entry for '+formatDate(dateStr));
-  updateSalesCheckHint();
+  updateSalesCheckHints();
   document.getElementById('sales-modal').classList.remove('hidden');
 }
 
-function updateSalesCheckHint() {
-  const cash   = parseFloat(document.getElementById('sales-cash').value)||0;
-  const online = parseFloat(document.getElementById('sales-online').value)||0;
-  const total  = parseFloat(document.getElementById('sales-total').value)||0;
-  const hint = document.getElementById('sales-check-hint');
-  if (!hint) return;
-  const sum = cash+online;
-  if (!total && !sum) { hint.textContent=''; hint.className='sales-check-hint'; return; }
-  const diff = total - sum;
-  const close = Math.abs(diff) < 0.5;
-  hint.textContent = `Cash + Online = ₹${sum.toLocaleString('en-IN')}${close ? ' — matches Total ✓' : ` (₹${Math.abs(diff).toLocaleString('en-IN')} ${diff>0?'more than':'less than'} Total)`}`;
-  hint.className = 'sales-check-hint ' + (close ? 'ok' : 'warn');
+function updateSalesCheckHints() {
+  const g = id => parseFloat(document.getElementById(id).value)||0;
+  const total=g('sales-total'), cash=g('sales-cash'), online=g('sales-online'), general=g('sales-general'), cig=g('sales-cigarettes');
+
+  const h1 = document.getElementById('sales-check-hint-1');
+  const sum1=cash+online, diff1=total-sum1, close1=Math.abs(diff1)<0.5;
+  if (!total && !sum1) { h1.textContent=''; h1.className='sales-check-hint'; }
+  else { h1.textContent = `Cash + Online = ₹${sum1.toLocaleString('en-IN')}${close1?' — matches Total ✓':` (₹${Math.abs(diff1).toLocaleString('en-IN')} ${diff1>0?'short of':'over'} Total)`}`; h1.className='sales-check-hint '+(close1?'ok':'warn'); }
+
+  const h2 = document.getElementById('sales-check-hint-2');
+  const sum2=general+cig, diff2=total-sum2, close2=Math.abs(diff2)<0.5;
+  if (!total && !sum2) { h2.textContent=''; h2.className='sales-check-hint'; }
+  else { h2.textContent = `General + Cigarettes = ₹${sum2.toLocaleString('en-IN')}${close2?' — matches Total ✓':` (₹${Math.abs(diff2).toLocaleString('en-IN')} ${diff2>0?'short of':'over'} Total)`}`; h2.className='sales-check-hint '+(close2?'ok':'warn'); }
 }
 
 async function saveSalesEntry() {
@@ -653,19 +879,24 @@ async function saveSalesEntry() {
   showToast('Sales entry saved!','success');
 }
 
-async function deleteSalesEntry() {
-  const sale_date = document.getElementById('sales-date').value;
-  if (!findSalesByDate(sale_date)) return;
-  closeModal('sales-modal');
-  if (sbClient&&SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    await sbClient.from('daily_sales').delete().eq('sale_date', sale_date);
-  } else {
-    allDailySales=allDailySales.filter(s=>s.sale_date!==sale_date);
-    localStorage.setItem('sc_sales',JSON.stringify(allDailySales));
-  }
-  await loadDailySales();
-  renderSalesCalendar(); renderSalesSummary(); renderSalesChart();
-  showToast('Entry deleted','success');
+// ── EXPORT ──
+function exportSalesCSV() {
+  if (!allDailySales.length) return showToast('No sales data to export yet','error');
+  const rows = [['Date','Total','General','Cigarettes','Milk (packets)','Cash','Online','Notes']];
+  [...allDailySales].sort((a,b)=>a.sale_date.localeCompare(b.sale_date)).forEach(r=>{
+    rows.push([r.sale_date, r.total||0, r.general||0, r.cigarettes||0, r.milk||0, r.cash||0, r.online||0, r.notes||'']);
+  });
+  const csv = rows.map(row=>row.map(cell=>{
+    const s=String(cell);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`sajays-cafe-sales-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Sales exported!','success');
 }
 
 // ── TREND CHART ──
@@ -685,6 +916,17 @@ function setSalesChartType(type, btn) {
   salesChart.type = type;
   document.querySelectorAll('.sales-type-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
+  renderSalesChart();
+}
+function setSalesWeekday(day, btn) {
+  salesChart.weekday = day;
+  document.querySelectorAll('.sales-weekday-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('sales-month-filter').classList.toggle('hidden', day==='all');
+  renderSalesChart();
+}
+function setSalesChartMonth(value) {
+  salesChart.monthFilter = value;
   renderSalesChart();
 }
 
@@ -708,6 +950,18 @@ function formatBucketLabel(key, period) {
 }
 
 function aggregateSales() {
+  if (salesChart.weekday !== 'all') {
+    const monthPrefix = salesChart.monthFilter;
+    const dayNum = parseInt(salesChart.weekday,10);
+    const rows = allDailySales
+      .filter(r=>r.sale_date.startsWith(monthPrefix) && new Date(r.sale_date+'T00:00:00').getDay()===dayNum)
+      .sort((a,b)=>a.sale_date.localeCompare(b.sale_date));
+    return {
+      labels: rows.map(r=>r.sale_date),
+      data: rows.map(r=>({total:+r.total||0,general:+r.general||0,cigarettes:+r.cigarettes||0,milk:+r.milk||0,cash:+r.cash||0,online:+r.online||0})),
+      isDayMode: true,
+    };
+  }
   const period = salesChart.period;
   const buckets = {};
   allDailySales.forEach(r=>{
@@ -717,40 +971,52 @@ function aggregateSales() {
   });
   const keys = Object.keys(buckets).sort();
   const recentKeys = keys.slice(-12); // keep the chart readable — last 12 buckets
-  return { labels: recentKeys, data: recentKeys.map(k=>buckets[k]) };
+  return { labels: recentKeys, data: recentKeys.map(k=>buckets[k]), isDayMode:false };
 }
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue('--'+name).trim() || '#8a7060'; }
 
 function renderSalesChart() {
   const canvas = document.getElementById('sales-chart-canvas');
   if (!canvas || typeof Chart==='undefined') return;
-  const {labels, data} = aggregateSales();
+  const {labels, data, isDayMode} = aggregateSales();
   const metric = salesChart.metric;
-  const fields = metric==='all' ? ['total','general','cigarettes','milk','cash','online'] : [metric];
-  const fieldMeta = {
-    total:{label:'Total',color:'#e6a455'}, general:{label:'General',color:'#c97d2e'},
-    cigarettes:{label:'Cigarettes',color:'#f2c47a'}, milk:{label:'Milk',color:'#8a7060'},
-    cash:{label:'Cash',color:'#4caf82'}, online:{label:'Online',color:'#5a9bd6'},
-  };
+  const fields = metric==='all' ? CHART_FIELDS.slice() : [metric];
+  const fieldLabels = {total:'Total',general:'General',cigarettes:'Cigarettes',milk:'Milk (packets)',cash:'Cash',online:'Online'};
   const isBar = (salesChart.type||'line')==='bar';
-  const datasets = fields.map(f=>({
-    label: fieldMeta[f].label,
-    data: data.map(d=>d[f]),
-    borderColor: fieldMeta[f].color,
-    backgroundColor: isBar ? fieldMeta[f].color+'99' : fieldMeta[f].color+'33',
-    tension: 0.35, fill: !isBar, borderWidth: 2, pointRadius: 3, pointBackgroundColor: fieldMeta[f].color,
-  }));
+  const muted = cssVar('muted'), gridColor = cssVar('border');
+  const displayLabels = isDayMode
+    ? labels.map(d=>formatDate(d))
+    : labels.map(k=>formatBucketLabel(k,salesChart.period));
+
+  const datasets = fields.map(f=>{
+    const color = chartColors[f] || '#c97d2e';
+    return {
+      label: fieldLabels[f],
+      data: data.map(d=>d[f]),
+      borderColor: color,
+      backgroundColor: isBar ? color+'99' : color+'33',
+      tension: 0.35, fill: !isBar, borderWidth: 2, pointRadius: 3, pointBackgroundColor: color,
+      yAxisID: f==='milk' ? 'y1' : 'y',
+    };
+  });
+
+  const scales = {
+    x: { ticks:{ color: muted }, grid:{ color: gridColor } },
+    y: { ticks:{ color: muted }, grid:{ color: gridColor }, beginAtZero:true, title:{display:fields.length>1,text:'₹',color:muted} },
+  };
+  if (fields.includes('milk')) {
+    scales.y1 = { position:'right', beginAtZero:true, ticks:{color:muted}, grid:{drawOnChartArea:false}, title:{display:true,text:'packets',color:muted} };
+  }
 
   if (salesChart.chartInstance) salesChart.chartInstance.destroy();
   salesChart.chartInstance = new Chart(canvas.getContext('2d'), {
     type: salesChart.type||'line',
-    data: { labels: labels.map(k=>formatBucketLabel(k,salesChart.period)), datasets },
+    data: { labels: displayLabels, datasets },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:'#8a7060' } } },
-      scales:{
-        x:{ ticks:{ color:'#8a7060' }, grid:{ color:'rgba(58,46,36,0.5)' } },
-        y:{ ticks:{ color:'#8a7060' }, grid:{ color:'rgba(58,46,36,0.5)' }, beginAtZero:true },
-      }
+      plugins:{ legend:{ labels:{ color: muted } } },
+      scales,
     }
   });
 }

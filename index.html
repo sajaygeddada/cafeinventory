@@ -75,7 +75,7 @@
       <div class="topbar-right">
         <span class="db-status" id="db-status">● Connecting...</span>
         <span class="topbar-date" id="topbar-date"></span>
-        <button id="theme-toggle" onclick="toggleTheme()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.85rem;">🌙 Dark</button>
+        <button id="theme-toggle" onclick="openThemeModal()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;cursor:pointer;font-size:0.85rem;">🎨 Theme</button>
       </div>
     </div>
 
@@ -183,12 +183,14 @@
             <button class="btn-sm" onclick="shiftSalesMonth(-1)">‹ Prev</button>
             <span id="sales-cal-label" class="sales-cal-label"></span>
             <button class="btn-sm" onclick="shiftSalesMonth(1)">Next ›</button>
-            <button class="btn-primary" style="margin-left:auto" onclick="openSalesEntry(new Date().toISOString().split('T')[0])">+ Add / Edit Today's Sales</button>
+            <button class="btn-secondary" onclick="exportSalesCSV()">⬇ Export CSV</button>
+            <button class="btn-primary" onclick="openSalesEntry(new Date().toISOString().split('T')[0])">+ Add / Edit Today's Sales</button>
           </div>
           <div class="sales-cal-dow">
             <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
           </div>
           <div id="sales-cal-grid" class="sales-cal-grid"></div>
+          <div class="cal-legend"><span class="cal-legend-dot has-data"></span> Has entry &nbsp; <span class="cal-legend-dot cal-mismatch"></span> Needs re-check</div>
         </div>
 
         <div class="sales-chart-card">
@@ -213,7 +215,27 @@
               <button class="chip-btn sales-type-btn" onclick="setSalesChartType('bar', this)">📊 Bar</button>
             </div>
           </div>
+
+          <div class="sales-chart-controls" style="margin-top:-0.4rem">
+            <div class="chip-group" id="sales-weekday-group">
+              <button class="chip-btn sales-weekday-btn active" onclick="setSalesWeekday('all', this)">All Days</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('0', this)">Sun</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('1', this)">Mon</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('2', this)">Tue</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('3', this)">Wed</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('4', this)">Thu</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('5', this)">Fri</button>
+              <button class="chip-btn sales-weekday-btn" onclick="setSalesWeekday('6', this)">Sat</button>
+            </div>
+            <input type="month" id="sales-month-filter" class="select-box hidden" onchange="setSalesChartMonth(this.value)" />
+          </div>
+
           <div class="sales-chart-wrap"><canvas id="sales-chart-canvas"></canvas></div>
+
+          <details class="chart-colors-details">
+            <summary>🎨 Item colors</summary>
+            <div id="chart-color-pickers" class="chart-color-pickers"></div>
+          </details>
         </div>
       </div>
     </div>
@@ -452,33 +474,34 @@
       <input type="hidden" id="sales-date" />
       <div class="field-group">
         <label>Total Sales (₹) *</label>
-        <input type="number" id="sales-total" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+        <input type="number" id="sales-total" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHints()" />
       </div>
       <div class="form-row">
         <div class="field-group">
           <label>General (₹)</label>
-          <input type="number" id="sales-general" placeholder="0.00" min="0" step="0.01" />
+          <input type="number" id="sales-general" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHints()" />
         </div>
         <div class="field-group">
           <label>Cigarettes (₹)</label>
-          <input type="number" id="sales-cigarettes" placeholder="0.00" min="0" step="0.01" />
+          <input type="number" id="sales-cigarettes" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHints()" />
         </div>
       </div>
+      <div id="sales-check-hint-2" class="sales-check-hint"></div>
       <div class="field-group">
-        <label>Milk (₹)</label>
-        <input type="number" id="sales-milk" placeholder="0.00" min="0" step="0.01" />
+        <label>Milk (packets)</label>
+        <input type="number" id="sales-milk" placeholder="0" min="0" step="1" />
       </div>
       <div class="form-row">
         <div class="field-group">
           <label>Cash (₹)</label>
-          <input type="number" id="sales-cash" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+          <input type="number" id="sales-cash" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHints()" />
         </div>
         <div class="field-group">
           <label>Online (₹)</label>
-          <input type="number" id="sales-online" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHint()" />
+          <input type="number" id="sales-online" placeholder="0.00" min="0" step="0.01" oninput="updateSalesCheckHints()" />
         </div>
       </div>
-      <div id="sales-check-hint" class="sales-check-hint"></div>
+      <div id="sales-check-hint-1" class="sales-check-hint"></div>
       <div class="field-group">
         <label>Notes</label>
         <input type="text" id="sales-notes" placeholder="Optional — e.g. festival day, closed early" />
@@ -488,6 +511,38 @@
       <button class="btn-danger hidden" id="sales-delete-btn" style="margin-right:auto">Delete</button>
       <button class="btn-secondary" onclick="closeModal('sales-modal')">Cancel</button>
       <button class="btn-primary" onclick="saveSalesEntry()">Save Sales</button>
+    </div>
+  </div>
+</div>
+
+<!-- THEME MODAL -->
+<div id="theme-modal" class="modal-overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>🎨 Appearance</h3>
+      <button class="modal-close" onclick="closeModal('theme-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="theme-section-label">Presets</p>
+      <div id="theme-preset-grid" class="theme-preset-grid"></div>
+
+      <p class="theme-section-label">Custom Theme</p>
+      <div class="custom-color-grid">
+        <div class="color-pick-row"><label>Background</label><input type="color" id="custom-bg" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Card / Surface</label><input type="color" id="custom-surface" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Primary</label><input type="color" id="custom-primary" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Accent</label><input type="color" id="custom-accent" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Text</label><input type="color" id="custom-text" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Secondary Text</label><input type="color" id="custom-muted" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Success</label><input type="color" id="custom-success" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Warning</label><input type="color" id="custom-warning" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Error</label><input type="color" id="custom-danger" oninput="applyCustomTheme()" /></div>
+        <div class="color-pick-row"><label>Info</label><input type="color" id="custom-info" oninput="applyCustomTheme()" /></div>
+      </div>
+      <p class="theme-hint">Picking any custom color switches you to "Custom" — it's saved automatically and stays until you pick a preset again.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('theme-modal')">Done</button>
     </div>
   </div>
 </div>
