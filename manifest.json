@@ -1,15 +1,17 @@
 {
-  "name": "Sajay's Cafe",
+  "name": "Sajay's Café",
   "short_name": "Sajay's Cafe",
-  "start_url": "./index.html",
+  "description": "Inventory and Operations Manager",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#0f0b08",
   "theme_color": "#0f0b08",
   "icons": [
     {
-      "src": "logo.png",
+      "src": "logo-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
