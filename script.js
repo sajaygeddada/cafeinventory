@@ -161,7 +161,7 @@ function initTheme() {
   if (saved && saved.key) applyTheme(saved.key, saved.customBase);
   else applyTheme('dakhni-amber');
 }
-initTheme(); // apply immediately so even the login screen is themed
+try { initTheme(); } catch(e) { console.warn('Theme init failed, falling back to defaults', e); } // apply immediately so even the login screen is themed
 
 // ── theme UI ──
 function renderThemeGrid() {
@@ -319,9 +319,18 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ─── AUTH (Supabase Auth) ──────────────────────
+function withTimeout(promise, ms) {
+  return Promise.race([
+    Promise.resolve(promise).then(v=>({timedOut:false, value:v})),
+    new Promise(resolve=>setTimeout(()=>resolve({timedOut:true}), ms)),
+  ]);
+}
+
 async function checkSession() {
   if (!sbClient) return;
-  const { data:{ session } } = await sbClient.auth.getSession();
+  const r = await withTimeout(sbClient.auth.getSession(), 8000);
+  if (r.timedOut) { console.warn('Session check timed out — Supabase unreachable'); return; }
+  const { data:{ session } } = r.value;
   if (session) showApp();
 }
 
@@ -331,13 +340,20 @@ async function handleLogin() {
   if (!email || !pass) return showLoginError();
   const btn = document.getElementById('login-btn');
   if (btn) { btn.disabled=true; btn.textContent='Signing in…'; }
-  const { error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+  const r = await withTimeout(sbClient.auth.signInWithPassword({ email, password: pass }), 10000);
   if (btn) { btn.disabled=false; btn.textContent='Sign In'; }
+  if (r.timedOut) return showLoginError('Connection timed out. Check your internet and try again.');
+  const { error } = r.value;
   if (error) return showLoginError();
   document.getElementById('login-error').classList.add('hidden');
   showApp();
 }
-function showLoginError() { document.getElementById('login-error').classList.remove('hidden'); document.getElementById('login-pass').value=''; }
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg || 'Incorrect credentials. Try again.';
+  el.classList.remove('hidden');
+  document.getElementById('login-pass').value='';
+}
 async function handleLogout() { await sbClient.auth.signOut(); location.reload(); }
 function showApp() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); loadAll(); }
 document.addEventListener('keydown', e => { if (e.key==='Enter' && !document.getElementById('login-screen').classList.contains('hidden')) handleLogin(); });
@@ -345,8 +361,11 @@ document.addEventListener('keydown', e => { if (e.key==='Enter' && !document.get
 async function updateDBStatus() {
   const el = document.getElementById('db-status');
   if (!sbClient || SUPABASE_URL==='YOUR_SUPABASE_URL') { el.textContent='● DB not configured'; el.className='db-status error'; return; }
-  try { const {error}=await sbClient.from('inventory').select('id').limit(1); if(error)throw error; el.textContent='● Supabase Connected'; el.className='db-status connected'; }
-  catch { el.textContent='● DB error'; el.className='db-status error'; }
+  const r = await withTimeout(sbClient.from('inventory').select('id').limit(1), 8000);
+  if (r.timedOut) { el.textContent='● Connection timed out — check Supabase project status'; el.className='db-status error'; return; }
+  const { error } = r.value;
+  if (error) { el.textContent='● DB error'; el.className='db-status error'; return; }
+  el.textContent='● Supabase Connected'; el.className='db-status connected';
 }
 
 async function loadAll() {
