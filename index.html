@@ -8,8 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 <!-- Manifest like here -->  
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0f0b08">
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f0b08" />
 </head>
 <body>
 
@@ -661,5 +661,18 @@
 <!-- Chart.js (sales trend chart) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="script.js"></script>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(registration => {
+          console.log('ServiceWorker registered successfully with scope: ', registration.scope);
+        })
+        .catch(err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+    });
+  }
+</script>
 </body>
 </html>
